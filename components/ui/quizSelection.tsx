@@ -8,6 +8,7 @@ interface QuizSelectionProps {
   optionLetter: string
   selected?: boolean
   onToggle?: (isSelected: boolean) => void
+  disabled?: boolean
   className?: string
 }
 
@@ -16,6 +17,7 @@ const QuizSelection = ({
   optionLetter,
   selected: controlledSelected,
   onToggle,
+  disabled = false,
   className,
   ...props
 }: QuizSelectionProps) => {
@@ -27,6 +29,8 @@ const QuizSelection = ({
   const isSelected = isControlled ? controlledSelected : internalSelected
 
   const handleClick = () => {
+    if (disabled) return
+
     const newSelectedState = !isSelected
     
     if (!isControlled) {
@@ -39,6 +43,7 @@ const QuizSelection = ({
   return (
     <button
       onClick={handleClick}
+      disabled={disabled}
       className={cn(
         'flex items-center justify-center gap-3 sm:gap-4 w-full max-w-[600px] min-h-[58px] px-3 sm:px-[18px]',
         'border-2 rounded-[8px]',
@@ -48,8 +53,10 @@ const QuizSelection = ({
         'text-[#4B4B4B]',
         // Selected state
         isSelected && 'bg-[#DDF4FF] border-[#84D8FF] shadow-[0_2px_0_0_#84D8FF] text-[#1899D6]',
+        // Disabled state
+        disabled && 'cursor-not-allowed opacity-70',
         // Hover state
-        !isSelected && 'hover:bg-gray-50',
+        !isSelected && !disabled && 'hover:bg-gray-50',
         className
       )}
       {...props}

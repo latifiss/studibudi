@@ -22,7 +22,7 @@ interface Question {
   explanation: string
 }
 
-const questions: Question[] = [
+const fallbackQuestions: Question[] = [
   {
     id: 1,
     question: 'What is the capital of France?',
@@ -100,8 +100,50 @@ Jupiter is the largest planet in our solar system and is known for its Great Red
   },
 ]
 
+const normalizeQuizData = (raw: unknown): Question[] => {
+  if (!Array.isArray(raw)) return fallbackQuestions
+
+  return raw
+    .map((item: any, index: number) => {
+      if (!item || typeof item.question !== 'string') return null
+
+      const options = Array.isArray(item.options)
+        ? item.options.map((option: any) => ({
+            id: String(option?.id ?? option?.label?.[0] ?? 'A'),
+            label: String(option?.label ?? '')
+          }))
+        : []
+
+      if (options.length === 0) return null
+
+      return {
+        id: Number(item.id ?? index + 1),
+        question: item.question,
+        options,
+        correctAnswer: String(item.correctAnswer ?? item.answer ?? options[0]?.id ?? 'A'),
+        explanation: String(item.explanation ?? 'No explanation provided.'),
+      }
+    })
+    .filter(Boolean) as Question[]
+}
+
+const loadStoredQuiz = (): Question[] => {
+  try {
+    const storedQuiz = localStorage.getItem('currentQuiz')
+    if (!storedQuiz) return fallbackQuestions
+
+    const parsedQuiz = JSON.parse(storedQuiz)
+    const normalized = normalizeQuizData(parsedQuiz)
+    return normalized.length > 0 ? normalized : fallbackQuestions
+  } catch (error) {
+    console.error('Failed to load generated quiz from storage:', error)
+    return fallbackQuestions
+  }
+}
+
 const Quiz = () => {
   const router = useRouter()
+  const [questions, setQuestions] = useState<Question[]>(fallbackQuestions)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
@@ -114,6 +156,10 @@ const Quiz = () => {
   const startSoundRef = useRef<HTMLAudioElement | null>(null)
   const completeSoundRef = useRef<HTMLAudioElement | null>(null)
   const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    setQuestions(loadStoredQuiz())
+  }, [])
 
   // Check if mobile
   useEffect(() => {
@@ -232,6 +278,9 @@ const Quiz = () => {
   }
 
   const handleRedo = () => {
+    const storedQuestions = loadStoredQuiz()
+
+    setQuestions(storedQuestions)
     setCurrentQuestionIndex(0)
     setSelectedOption(null)
     setAnswers({})
@@ -240,7 +289,7 @@ const Quiz = () => {
     setIsComplete(false)
     setScore(0)
     setShowExplanation(false)
-    
+
     if (startSoundRef.current) {
       startSoundRef.current.currentTime = 0
       startSoundRef.current.play().catch(() => {})
