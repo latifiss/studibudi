@@ -70,11 +70,28 @@ const handleFileSelect = async (file: File) => {
     }
     
     if (data.success && data.quiz) {
-      localStorage.setItem('currentQuiz', JSON.stringify(data.quiz))
-      onQuizGenerated?.(data.quiz)
-      
+      const savedQuizResponse = await fetch('/api/quizzes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: `Quiz ${new Date().toLocaleDateString()}`,
+          sourceName: file.name,
+          questions: data.quiz,
+        }),
+      })
+
+      const savedQuizData = savedQuizResponse.ok ? await savedQuizResponse.json() : null
+
+      const currentQuiz = Array.isArray(data.quiz) ? data.quiz : []
+      localStorage.setItem('currentQuiz', JSON.stringify(currentQuiz))
+      localStorage.setItem('currentQuizId', savedQuizData?.quiz?.id ?? '')
+      onQuizGenerated?.(currentQuiz)
+
       // Navigate to quiz page
-      window.location.href = '/quiz'
+      const url = savedQuizData?.quiz?.id ? `/quiz?historyId=${savedQuizData.quiz.id}` : '/quiz'
+      window.location.href = url
     } else {
       throw new Error(data.error || 'Failed to generate quiz')
     }

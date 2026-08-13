@@ -9,7 +9,7 @@ export default async function AuthSuccessPage() {
   });
 
   if (!session) {
-    redirect("/");
+    redirect("/signin");
   }
 
   const profile = await prisma.profile.findUnique({
@@ -18,22 +18,13 @@ export default async function AuthSuccessPage() {
     },
   });
 
-  // First time user
   if (!profile) {
     await prisma.profile.create({
       data: {
         userId: session.user.id,
       },
     });
-
-    redirect("/onboarding");
   }
 
-  // Returning user who has not finished onboarding
-  if (!profile.onboardingCompleted) {
-    redirect("/onboarding");
-  }
-
-  // Existing completed user
-  redirect("/");
+  redirect("/dashboard");
 }

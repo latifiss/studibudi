@@ -141,6 +141,28 @@ const loadStoredQuiz = (): Question[] => {
   }
 }
 
+const loadHistoryQuiz = async (historyId: string): Promise<Question[]> => {
+  try {
+    const response = await fetch(`/api/quizzes/${historyId}`)
+    if (!response.ok) {
+      return loadStoredQuiz()
+    }
+
+    const data = await response.json()
+    const normalized = normalizeQuizData(data?.quiz?.questions)
+    if (normalized.length > 0) {
+      localStorage.setItem('currentQuiz', JSON.stringify(normalized))
+      localStorage.setItem('currentQuizId', historyId)
+      return normalized
+    }
+
+    return loadStoredQuiz()
+  } catch (error) {
+    console.error('Failed to load quiz from history:', error)
+    return loadStoredQuiz()
+  }
+}
+
 const Quiz = () => {
   const router = useRouter()
   const [questions, setQuestions] = useState<Question[]>(fallbackQuestions)
@@ -158,7 +180,20 @@ const Quiz = () => {
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    setQuestions(loadStoredQuiz())
+    const loadQuiz = async () => {
+      const params = new URLSearchParams(window.location.search)
+      const historyId = params.get('historyId')
+
+      if (historyId) {
+        const historyQuiz = await loadHistoryQuiz(historyId)
+        setQuestions(historyQuiz)
+        return
+      }
+
+      setQuestions(loadStoredQuiz())
+    }
+
+    loadQuiz()
   }, [])
 
   // Check if mobile

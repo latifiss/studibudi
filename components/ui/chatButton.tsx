@@ -36,7 +36,7 @@ const ChatButton = ({
       {...props}
     >
       <ChatIcon className="w-5 h-5 text-black dark:text-white" />
-      <span>New Chat</span>
+      <span>new quiz</span>
     </button>
   )
 }

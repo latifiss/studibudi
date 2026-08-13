@@ -1,13 +1,15 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { Wordmark } from '@/public/icons/logo'
 import ChatButton from './chatButton'
 import SidebarItem from './sidebarItem'
 import SidebarHead from './sidebarItemHead'
 import SidebarProfile from './sidebarProfileItem'
+import { useUser } from '@/hooks/use-user'
 
 interface ChatHistoryItem {
   id: string
@@ -35,6 +37,49 @@ const Sidebar = ({
   className,
   ...props
 }: SidebarProps) => {
+  const router = useRouter()
+  const { authenticated } = useUser()
+  const [quizHistory, setQuizHistory] = useState<ChatHistoryItem[]>([])
+
+  useEffect(() => {
+    if (!authenticated) {
+      setQuizHistory([])
+      return
+    }
+
+    const loadQuizHistory = async () => {
+      try {
+        const response = await fetch('/api/quizzes')
+        if (!response.ok) {
+          setQuizHistory([])
+          return
+        }
+
+        const data = await response.json()
+        const items = (data.quizzes ?? []).map((item: any) => ({
+          id: item.id,
+          title: item.title || 'Untitled quiz',
+          href: `/quiz?historyId=${item.id}`,
+        }))
+
+        setQuizHistory(items)
+      } catch (error) {
+        console.error('Failed to load quiz history:', error)
+        setQuizHistory([])
+      }
+    }
+
+    loadQuizHistory()
+  }, [authenticated])
+
+  const historyList = authenticated && quizHistory.length > 0 ? quizHistory : chatHistory
+
+  const handleNewQuiz = () => {
+    localStorage.removeItem('currentQuiz')
+    localStorage.removeItem('currentQuizId')
+    router.push('/dashboard')
+  }
+
   return (
     <aside
       className={cn(
@@ -67,7 +112,7 @@ const Sidebar = ({
       <div className="h-4" />
 
       <div className="flex flex-col px-4 sm:px-5 flex-1">
-        <ChatButton onClick={() => console.log('New chat')} />
+        <ChatButton onClick={handleNewQuiz} />
 
         <div className="h-5" />
 
@@ -77,7 +122,7 @@ const Sidebar = ({
           <div className="h-2" />
 
           <div className="flex flex-col gap-1">
-            {chatHistory.map((item) => (
+            {historyList.map((item) => (
               <SidebarItem
                 key={item.id}
                 href={item.href}
