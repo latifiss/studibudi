@@ -19,21 +19,10 @@ interface ChatHistoryItem {
 }
 
 interface SidebarProps {
-  chatHistory?: ChatHistoryItem[]
   className?: string
 }
 
-const defaultChatHistory: ChatHistoryItem[] = [
-  { id: '1', title: 'How to build a React app', href: '/chat/1' },
-  { id: '2', title: 'Understanding Next.js 14', href: '/chat/2' },
-  { id: '3', title: 'Tailwind CSS best practices', href: '/chat/3' },
-  { id: '4', title: 'API routes in Next.js', href: '/chat/4' },
-  { id: '5', title: 'Deploying to Vercel', href: '/chat/5' },
-  { id: '6', title: 'Authentication with NextAuth', href: '/chat/6' },
-]
-
 const Sidebar = ({
-  chatHistory = defaultChatHistory,
   className,
   ...props
 }: SidebarProps) => {
@@ -43,7 +32,6 @@ const Sidebar = ({
 
   useEffect(() => {
     if (!authenticated) {
-      setQuizHistory([])
       return
     }
 
@@ -56,7 +44,7 @@ const Sidebar = ({
         }
 
         const data = await response.json()
-        const items = (data.quizzes ?? []).map((item: any) => ({
+        const items = (data.quizzes ?? []).map((item: { id: string; title?: string }) => ({
           id: item.id,
           title: item.title || 'Untitled quiz',
           href: `/quiz?historyId=${item.id}`,
@@ -71,8 +59,6 @@ const Sidebar = ({
 
     loadQuizHistory()
   }, [authenticated])
-
-  const historyList = authenticated && quizHistory.length > 0 ? quizHistory : chatHistory
 
   const handleNewQuiz = () => {
     localStorage.removeItem('currentQuiz')
@@ -117,20 +103,28 @@ const Sidebar = ({
         <div className="h-5" />
 
         <div className="flex-1 flex flex-col overflow-y-auto">
-          <SidebarHead label="CHAT HISTORY" />
-
-          <div className="h-2" />
-
-          <div className="flex flex-col gap-1">
-            {historyList.map((item) => (
-              <SidebarItem
-                key={item.id}
-                href={item.href}
-                label={item.title}
-                active={item.active}
-              />
-            ))}
-          </div>
+          {authenticated ? (
+            <>
+              <SidebarHead label="QUIZ HISTORY" />
+              <div className="h-2" />
+              {quizHistory.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {quizHistory.map((item) => (
+                    <SidebarItem
+                      key={item.id}
+                      href={item.href}
+                      label={item.title}
+                      active={item.active}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-muted-foreground px-2 py-4 text-left">
+                  Your past quizzes will appear here
+                </div>
+              )}
+            </>
+          ) : null}
         </div>
       </div>
 
