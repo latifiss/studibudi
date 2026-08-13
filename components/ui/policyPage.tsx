@@ -35,7 +35,6 @@ const PolicyPage: React.FC<PolicyPageProps> = ({ data }) => {
           <p className="text-muted text-lg">
             Last updated: {new Date(data.lastUpdated).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
           </p>
-          <div className="w-16 h-1 bg-[#7FF86C] rounded-full" />
         </div>
 
         <div className="space-y-8">

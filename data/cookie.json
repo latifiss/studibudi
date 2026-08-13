@@ -1,6 +1,6 @@
 {
   "title": "Cookie Policy",
-  "lastUpdated": "2024-01-01",
+  "lastUpdated": "2026-05-01",
   "sections": [
     {
       "title": "1. What Are Cookies",
@@ -8,7 +8,7 @@
     },
     {
       "title": "2. How We Use Cookies",
-      "content": "We use cookies to understand how you interact with our platform, remember your preferences, and analyze usage patterns. This helps us improve our service and provide you with a personalized experience. We also use cookies for authentication and security purposes."
+      "content": "We use cookies to understand how you interact with our platform, remember your preferences, and analyze usage patterns. This helps us improve our service and provide you with a personalized learning experience. We also use cookies for authentication and security purposes."
     },
     {
       "title": "3. Types of Cookies We Use",
@@ -24,7 +24,7 @@
     },
     {
       "title": "6. Analytics and Performance",
-      "content": "We use analytics tools to understand how users interact with our platform. This data helps us improve our service and provide better user experiences. All analytics data is anonymized and does not personally identify you."
+      "content": "We use analytics tools to understand how users interact with our platform. This data helps us improve our service and provide better learning experiences. All analytics data is anonymized and does not personally identify you."
     },
     {
       "title": "7. Data Privacy and Cookies",
@@ -40,8 +40,8 @@
     },
     {
       "title": "10. Contact Us",
-      "content": "If you have any questions about our Cookie Policy or how we handle your data, please contact us at privacy@qorelytics.com. We are committed to addressing any concerns you may have."
+      "content": "If you have any questions about our Cookie Policy or how we handle your data, please contact us at privacy@studibudi.com. We are committed to addressing any concerns you may have."
     }
   ],
-  "footer": "By using Qorelytics, you consent to our use of cookies as described in this policy."
+  "footer": "By using Studibudi, you consent to our use of cookies as described in this policy."
 }
