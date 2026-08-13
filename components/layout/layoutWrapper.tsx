@@ -34,6 +34,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                      pathname === '/not-found' ||
                      pathname === '/pro' ||
                      pathname === '/quiz' ||
+                     pathname === '/dashboard' ||
                      pathname === '/intro' 
 
   // Pages that should show AltHeader

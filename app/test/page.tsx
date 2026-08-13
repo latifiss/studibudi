@@ -1,7 +1,9 @@
 'use client'
 
 import CookieBanner from '@/components/ui/cookieBanner'
+import Loader from '@/components/ui/loader'
 import SocialButton from '@/components/ui/socialButton'
+import { AIcon, BIcon, CIcon, DIcon } from '@/public/icons/load'
 
 export default function LoginPage() {
   const handleSocialLogin = (provider: string) => {
@@ -11,6 +13,7 @@ export default function LoginPage() {
 
   return (
     <div className='flex flex-col gap-4 max-w-sm mx-auto'>
+      <Loader />
       <SocialButton 
         type='google' 
         onClick={() => handleSocialLogin('google')}
