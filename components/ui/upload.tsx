@@ -9,24 +9,84 @@ interface UploadProps {
   variant?: 'default' | 'alternate'
   className?: string
   onFileUpload?: (file: File) => void
+  onQuizGenerated?: (quiz: any) => void
 }
 
-const Upload = ({ variant = 'default', className, onFileUpload }: UploadProps) => {
+const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated }: UploadProps) => {
   const [isLoading, setIsLoading] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const isAlternate = variant === 'alternate'
 
-  const handleFileSelect = (file: File) => {
-    setIsLoading(true)
-    onFileUpload?.(file)
+  // In upload.tsx
+// components/ui/upload.tsx - updated handleFileSelect
+const handleFileSelect = async (file: File) => {
+  setIsLoading(true)
+  setError(null)
+  onFileUpload?.(file)
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('numQuestions', '5')
+
+    // Use absolute URL for API call
+    const apiUrl = '/api/generate-quiz'
     
-    // Simulate loading completion (will be replaced with actual upload logic)
-    setTimeout(() => {
-      setIsLoading(false)
-    }, 3000)
+    console.log('Sending request to:', apiUrl)
+    console.log('File:', file.name, file.size, file.type)
+
+    const response = await fetch(apiUrl, {
+      method: 'POST',
+      body: formData,
+    })
+
+    console.log('Response status:', response.status)
+
+    // Try to get the response as text first for debugging
+    const responseText = await response.text()
+    console.log('Response text:', responseText)
+
+    let data
+    try {
+      data = JSON.parse(responseText)
+    } catch {
+      throw new Error(`Server returned invalid response: ${responseText.substring(0, 100)}`)
+    }
+
+    if (!response.ok) {
+      if (response.status === 504) {
+        throw new Error('The request timed out. Please try again with a shorter document.')
+      }
+      if (response.status === 413) {
+        throw new Error('File is too large. Please upload a smaller file.')
+      }
+      if (response.status === 500) {
+        throw new Error('Server error. Please try again later.')
+      }
+      throw new Error(data.error || `Failed to generate quiz (Status: ${response.status})`)
+    }
+    
+    if (data.success && data.quiz) {
+      localStorage.setItem('currentQuiz', JSON.stringify(data.quiz))
+      onQuizGenerated?.(data.quiz)
+      
+      // Navigate to quiz page
+      window.location.href = '/quiz'
+    } else {
+      throw new Error(data.error || 'Failed to generate quiz')
+    }
+  } catch (error) {
+    console.error('Upload error:', error)
+    const message = error instanceof Error ? error.message : 'Failed to process file'
+    setError(message)
+    setIsLoading(false)
+  } finally {
+    setIsLoading(false)
   }
+}
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -63,14 +123,12 @@ const Upload = ({ variant = 'default', className, onFileUpload }: UploadProps) =
 
   return (
     <>
-      {/* Full-screen Loader Overlay */}
       {isLoading && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white">
           <Loader onComplete={() => {}} />
         </div>
       )}
 
-      {/* Upload Component */}
       <div
         className={cn(
           'flex flex-col items-start p-4 sm:p-6 lg:p-6',
@@ -151,9 +209,15 @@ const Upload = ({ variant = 'default', className, onFileUpload }: UploadProps) =
               </p>
             </div>
 
+            {error && (
+              <p className="text-[#FE1212] text-sm mt-2 text-center">
+                {error}
+              </p>
+            )}
+
             <div className={cn(
               'flex flex-col items-start',
-              isAlternate ? 'pt-3 sm:pt-4' : 'pt-2 sm:pt-3 lg:pt-4',
+              isAlternate ? 'pt-2 sm:pt-3' : 'pt-1 sm:pt-2 lg:pt-3',
               isAlternate ? 'w-[120px]' : 'w-[70px] sm:w-[120px] lg:w-[137px]'
             )}>
               <button
