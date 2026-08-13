@@ -17,7 +17,6 @@ const DashboardHeader = () => {
   return (
     <>
       <header className='lg:hidden flex items-center justify-between w-full h-18 px-4 border-b border-border bg-white relative z-50'>
-        {/* Menu Button - Left */}
         <button
           onClick={toggleSidebar}
           className="p-1 hover:opacity-70 transition-opacity"
@@ -26,7 +25,6 @@ const DashboardHeader = () => {
           <Menu className="w-6 h-6 text-foreground" />
         </button>
 
-        {/* Wordmark - Center */}
         <Link 
           href="/"
           className="cursor-pointer hover:opacity-70 transition-opacity"
@@ -35,7 +33,6 @@ const DashboardHeader = () => {
           <Wordmark className="text-foreground" />
         </Link>
 
-        {/* New Chat Button - Right */}
         <button
           onClick={() => console.log('New chat')}
           className="flex items-center justify-center w-9 h-9 rounded-full border border-border hover:bg-gray-50 transition-colors"
@@ -45,7 +42,6 @@ const DashboardHeader = () => {
         </button>
       </header>
 
-      {/* Mobile Sidebar */}
       <SidebarMobile isOpen={isSidebarOpen} onClose={toggleSidebar} />
     </>
   )
