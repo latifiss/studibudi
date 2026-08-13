@@ -16,6 +16,11 @@ interface GridContainerProps {
   isLast?: boolean
 }
 
+interface ProUpgradeCardProps {
+  onSubscribe?: () => void
+  onCancel?: () => void
+}
+
 export const GridContainer = ({
   first,
   second,
@@ -64,7 +69,7 @@ export const GridContainer = ({
   )
 }
 
-const ProUpgradeCard = () => {
+const ProUpgradeCard = ({ onSubscribe, onCancel }: ProUpgradeCardProps) => {
   return (
     <div className='flex flex-col w-full h-screen max-h-screen overflow-hidden bg-[#000437] px-3 sm:px-0'>
       <div className='flex items-center justify-start w-full h-14 sm:h-18 px-3 sm:px-9 shrink-0'>
@@ -112,17 +117,16 @@ const ProUpgradeCard = () => {
             />
           </div>
 
-          {/* Buttons Section */}
           <div className='flex flex-col items-center gap-3 sm:gap-3.5 mt-6 sm:mt-11.75 w-full px-3 sm:px-0 shrink-0'>
             <BaseButton 
               variant="long"
-              onClick={() => console.log('Subscribe to Pro')}
+              onClick={onSubscribe || (() => console.log('Subscribe to Pro'))}
               className="w-full max-w-100 h-10 sm:h-10.5 text-[11px] sm:text-[13px]"
             >
               Subscribe to Pro
             </BaseButton>
             <button 
-              onClick={() => console.log('Cancel')}
+              onClick={onCancel || (() => console.log('Cancel'))}
               className="font-text text-white text-[11px] sm:text-[13px] font-medium hover:opacity-70 transition-opacity uppercase tracking-normal"
             >
               Cancel

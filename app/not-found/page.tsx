@@ -1,44 +1,41 @@
-'use client';
-
-import Link from 'next/link';
-import { motion } from 'framer-motion';
-import { useTheme } from '@/context/themeContext';
-import { Icon404 } from '@/public/icons/color';
+import Link from 'next/link'
+import BaseButton from '@/components/ui/baseButton'
+import { SpillIcon } from '@/public/icons/illustrations'
 
 export default function NotFound() {
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
-
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="flex flex-col items-center"
-      >
-        <div className="shrink-0">
-          <Icon404 
-            size={228}
-            accentColor={isDark ? '#ffffff' : '#1E1E1E'}
-            className="sm:w-86.5 lg:w-120.75 h-auto"
-          />
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white dark:bg-[#1a1a2e] px-4 sm:px-6 lg:px-8">
+      <div className="flex flex-col items-center text-center max-w-125">
+        <div className="relative mb-8">
+          <span className="font-display text-[#000000] dark:text-white text-8xl sm:text-9xl font-bold tracking-tight block relative z-10">
+            404
+          </span>
+          <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-[160%] max-w-87.5 z-0">
+            <SpillIcon
+              size={350}
+              color="#4F4CF0"
+              className="w-full h-auto dark:opacity-80"
+            />
+          </div>
         </div>
 
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.3, duration: 0.4 }}
-          className="mt-8"
-        >
-          <Link
-            href="/"
-            className="text-foreground text-2xl font-medium underline lowercase hover:opacity-70 transition-opacity relative after:content-[''] after:absolute after:left-0 after:bottom-0 after:w-full after:h-0.5 after:bg-foreground after:scale-x-100 after:origin-left hover:after:scale-x-0 after:transition-transform after:duration-300"
-          >
-            Go Home
+        <div className="space-y-3 mt-10">
+          <h2 className="font-display text-[#333333] dark:text-white text-2xl sm:text-3xl font-medium">
+            Page Not Found
+          </h2>
+          <p className="font-text text-[#737373] dark:text-[#9CA3AF] text-base sm:text-lg max-w-100">
+            The page you&apos;re looking for doesn&apos;t exist or has been moved to another URL.
+          </p>
+        </div>
+
+        <div className="mt-8 w-full max-w-100">
+          <Link href="/" className="w-full">
+            <BaseButton variant="default" className="w-full px-8">
+              Go Back Home
+            </BaseButton>
           </Link>
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
-  );
+  )
 }

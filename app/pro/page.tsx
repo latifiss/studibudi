@@ -27,10 +27,10 @@ const page = () => {
       {/* <Detail/> */}
       {/* <School />
       <Upload/> */}
-      <Hero/>
-          {/* <ProUpgradeCard /> */}
-          {/* <LeaveFeedback/> */}
-          {/* <ConfirmLeave/> */}
+      {/* <Hero/> */}
+          <ProUpgradeCard />
+          <LeaveFeedback/>
+          <ConfirmLeave/>
           {/* <QuizSelection 
   label="What is the capital of France?"
   optionLetter="A"

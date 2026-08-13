@@ -23,6 +23,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
                       pathname === '/privacy' ||
                       pathname === '/refund-policy' ||
                       pathname === '/cookie' ||
+                      pathname === '/upgrade' ||
+                      pathname === '/cancel' ||
+                      pathname === '/cancel/success' ||
+                      pathname === '/cancel/failed' ||
+                      pathname === '/cancel/confirm' ||
                       pathname === '/pro' ||
                       pathname === '/quiz' ||
                       pathname === '/home' ||
@@ -32,7 +37,12 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const hideHeader = pathname === '/login' || 
                      pathname === '/signin' ||
                      pathname === '/not-found' ||
-                     pathname === '/pro' ||
+    pathname === '/pro' ||
+     pathname === '/upgrade' ||
+                           pathname === '/cancel/success' ||
+                      pathname === '/cancel/failed' ||
+                      pathname === '/cancel/confirm' ||
+                      pathname === '/cancel' ||
                      pathname === '/quiz' ||
                      pathname === '/dashboard' ||
                      pathname === '/intro' 
