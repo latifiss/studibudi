@@ -8,7 +8,6 @@ import ChatButton from './chatButton'
 import SidebarItem from './sidebarItem'
 import SidebarHead from './sidebarItemHead'
 import SidebarProfile from './sidebarProfileItem'
-import { ChatIcon } from '@/public/icons/mono'
 
 interface ChatHistoryItem {
   id: string
@@ -39,17 +38,16 @@ const Sidebar = ({
   return (
     <aside
       className={cn(
-        'flex flex-col w-[280px] h-screen max-h-screen px-5 py-0',
+        'flex flex-col h-screen max-h-screen py-0',
         'bg-background border-r border-border',
         'transition-colors duration-200',
         'overflow-y-auto',
         'scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted hover:scrollbar-thumb-foreground',
         'max-lg:scrollbar-hide',
-        className
+        className || 'w-70'
       )}
       {...props}
     >
-      {/* SideHead - embedded directly */}
       <div
         className={cn(
           'flex items-center justify-start w-full h-18 px-3',
@@ -66,37 +64,31 @@ const Sidebar = ({
         </Link>
       </div>
 
-      {/* 16px spacing */}
       <div className="h-4" />
 
-      {/* ChatButton */}
-      <ChatButton onClick={() => console.log('New chat')} />
+      <div className="flex flex-col px-4 sm:px-5 flex-1">
+        <ChatButton onClick={() => console.log('New chat')} />
 
-      {/* 20px spacing */}
-      <div className="h-5" />
+        <div className="h-5" />
 
-      {/* Chat History Container */}
-      <div className="flex-1 flex flex-col py-4 overflow-y-auto">
-        {/* Chat History Header */}
-        <SidebarHead label="CHAT HISTORY" />
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          <SidebarHead label="CHAT HISTORY" />
 
-        {/* 8px spacing */}
-        <div className="h-2" />
+          <div className="h-2" />
 
-        {/* Chat History Items */}
-        <div className="flex flex-col gap-1">
-          {chatHistory.map((item) => (
-            <SidebarItem
-              key={item.id}
-              href={item.href}
-              label={item.title}
-              active={item.active}
-            />
-          ))}
+          <div className="flex flex-col gap-1">
+            {chatHistory.map((item) => (
+              <SidebarItem
+                key={item.id}
+                href={item.href}
+                label={item.title}
+                active={item.active}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* SidebarProfile at the bottom */}
       <SidebarProfile />
     </aside>
   )

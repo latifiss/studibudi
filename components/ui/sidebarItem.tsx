@@ -25,7 +25,7 @@ const SidebarItem = ({
       href={href}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 w-full h-8 px-2 rounded-lg',
+        'flex items-center gap-3 w-full h-8',
         'font-text text-[14px] leading-auto',
         'bg-transparent text-[#333333] dark:text-white',
         'transition-all duration-200 ease-in-out',

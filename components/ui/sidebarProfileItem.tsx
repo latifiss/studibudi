@@ -18,7 +18,7 @@ const SidebarProfile = ({
   return (
     <div
       className={cn(
-        'flex items-center gap-2 w-full h-19 px-2',
+        'flex items-center gap-2 w-full h-19 px-4 sm:px-5',
         'border-t border-[#E5E5E5] dark:border-[#2a2a3e]',
         'bg-transparent',
         'transition-colors duration-200',

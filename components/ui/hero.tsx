@@ -110,7 +110,13 @@ const Hero = ({ className }: HeroProps) => {
           </div>
         </div>
         <div className="relative z-10 w-full max-w-80.5 sm:max-w-125 lg:max-w-100">
-          <Upload variant="default" />
+          <Upload 
+  variant="default" 
+  onFileUpload={(file) => {
+    console.log('File selected:', file.name)
+    // Handle file upload logic here
+  }}
+/>
         </div>
       </div>
 
