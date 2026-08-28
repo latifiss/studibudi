@@ -151,7 +151,7 @@ const handleFileSelect = async (file: File) => {
           'flex flex-col items-start p-4 sm:p-6 lg:p-6',
           'bg-white rounded-3xl',
           'relative',
-          isAlternate ? 'w-full max-w-[961px] h-[299px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[165px] sm:h-[279px] lg:h-[612px]',
+          isAlternate ? 'w-full max-w-[961px] h-[349px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[165px] sm:h-[279px] lg:h-[612px]',
           'shadow-[0px_0px_1px_rgba(0,0,0,0.05),0px_3.2px_89.6px_-25.6px_rgba(0,0,0,0.1),0px_6.4px_102.4px_-38.4px_rgba(0,0,0,0.2),0px_12.8px_64px_-38.4px_rgba(0,0,0,0.3),0px_19.2px_76.8px_-51.2px_rgba(0,0,0,0.4),0px_25.6px_89.6px_-64px_rgba(0,0,0,0.5)]',
           'after:absolute after:inset-0 after:rounded-3xl after:pointer-events-none after:bg-white/0.002',
           'z-0',
