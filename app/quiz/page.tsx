@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation'
+import { cn } from '@/lib/utils'
 import { CloseIcon } from '@/public/icons/mono'
 import Progress from '@/components/ui/progress'
 import QuizSelection from '@/components/ui/quizSelection'
@@ -14,197 +14,123 @@ import Explanation from '@/components/ui/explanation'
 interface Question {
   id: number
   question: string
-  options: {
-    id: string
-    label: string
-  }[]
+  options: { id: string; label: string }[]
   correctAnswer: string
   explanation: string
+  sourceReference?: string
 }
-
-const fallbackQuestions: Question[] = [
-  {
-    id: 1,
-    question: 'What is the capital of France?',
-    options: [
-      { id: 'A', label: 'Paris' },
-      { id: 'B', label: 'London' },
-      { id: 'C', label: 'Berlin' },
-    ],
-    correctAnswer: 'A',
-    explanation: `Paris is the capital of France. It has been the capital since 508 AD and is one of the most important cultural and political centers in Europe.
-
-London is the capital of the United Kingdom, not France. It is located in England and is the largest city in the UK.
-
-Berlin is the capital of Germany. It became the capital of a unified Germany in 1990 after the reunification of East and West Germany.`,
-  },
-  {
-    id: 2,
-    question: 'What is the largest planet in our solar system?',
-    options: [
-      { id: 'A', label: 'Jupiter' },
-      { id: 'B', label: 'Saturn' },
-      { id: 'C', label: 'Neptune' },
-    ],
-    correctAnswer: 'A',
-    explanation: `Jupiter is the largest planet in our solar system. It has a diameter of about 142,984 km at its equator and is more than 11 times the diameter of Earth.
-
-Saturn is the second-largest planet but is much smaller than Jupiter, with a diameter of about 120,536 km.
-
-Neptune is the fourth-largest planet with a diameter of about 49,528 km, making it significantly smaller than both Jupiter and Saturn.`,
-  },
-  {
-    id: 3,
-    question: 'What is the chemical symbol for water?',
-    options: [
-      { id: 'A', label: 'H2O' },
-      { id: 'B', label: 'CO2' },
-      { id: 'C', label: 'NaCl' },
-    ],
-    correctAnswer: 'A',
-    explanation: `H2O is the chemical symbol for water. It consists of two hydrogen atoms bonded to one oxygen atom.
-
-CO2 is the chemical symbol for carbon dioxide, which is a gas that plants use for photosynthesis.
-
-NaCl is the chemical symbol for sodium chloride, commonly known as table salt.`,
-  },
-  {
-    id: 4,
-    question: 'Which planet is known as the Red Planet?',
-    options: [
-      { id: 'A', label: 'Venus' },
-      { id: 'B', label: 'Mars' },
-      { id: 'C', label: 'Jupiter' },
-    ],
-    correctAnswer: 'B',
-    explanation: `Mars is known as the Red Planet due to the presence of iron oxide (rust) on its surface, which gives it a reddish appearance.
-
-Venus is known as Earth's "sister planet" due to its similar size and is covered in thick clouds of sulfuric acid.
-
-Jupiter is the largest planet in our solar system and is known for its Great Red Spot, a massive storm.`,
-  },
-  {
-    id: 5,
-    question: 'What is the speed of light approximately?',
-    options: [
-      { id: 'A', label: '300,000 km/s' },
-      { id: 'B', label: '150,000 km/s' },
-      { id: 'C', label: '500,000 km/s' },
-    ],
-    correctAnswer: 'A',
-    explanation: `The speed of light is approximately 300,000 kilometers per second (km/s) or about 186,000 miles per second. It is the fastest speed in the universe.
-
-150,000 km/s is too slow for the speed of light in a vacuum.
-
-500,000 km/s is too fast - nothing can travel faster than the speed of light in a vacuum.`,
-  },
-]
 
 const normalizeQuizData = (raw: unknown): Question[] => {
-  if (!Array.isArray(raw)) return fallbackQuestions
-
-  return raw
-    .map((item: any, index: number) => {
-      if (!item || typeof item.question !== 'string') return null
-
-      const options = Array.isArray(item.options)
-        ? item.options.map((option: any) => ({
-            id: String(option?.id ?? option?.label?.[0] ?? 'A'),
-            label: String(option?.label ?? '')
-          }))
-        : []
-
-      if (options.length === 0) return null
-
-      return {
-        id: Number(item.id ?? index + 1),
-        question: item.question,
-        options,
-        correctAnswer: String(item.correctAnswer ?? item.answer ?? options[0]?.id ?? 'A'),
-        explanation: String(item.explanation ?? 'No explanation provided.'),
-      }
-    })
-    .filter(Boolean) as Question[]
-}
-
-const loadStoredQuiz = (): Question[] => {
-  try {
-    const storedQuiz = localStorage.getItem('currentQuiz')
-    if (!storedQuiz) return fallbackQuestions
-
-    const parsedQuiz = JSON.parse(storedQuiz)
-    const normalized = normalizeQuizData(parsedQuiz)
-    return normalized.length > 0 ? normalized : fallbackQuestions
-  } catch (error) {
-    console.error('Failed to load generated quiz from storage:', error)
-    return fallbackQuestions
-  }
-}
-
-const loadHistoryQuiz = async (historyId: string): Promise<Question[]> => {
-  try {
-    const response = await fetch(`/api/quizzes/${historyId}`)
-    if (!response.ok) {
-      return loadStoredQuiz()
+  if (!Array.isArray(raw)) return []
+  return raw.map((item: any, index) => {
+    const options = Array.isArray(item?.options) ? item.options.map((option: any) => ({ id: String(option?.id ?? '').toUpperCase(), label: String(option?.label ?? '') })).filter((option: any) => option.id && option.label) : []
+    return {
+      id: Number(item?.id) || index + 1,
+      question: String(item?.question ?? '').trim(),
+      options,
+      correctAnswer: String(item?.correctAnswer ?? item?.answer ?? '').toUpperCase(),
+      explanation: String(item?.explanation ?? '').trim(),
+      sourceReference: String(item?.sourceReference ?? '').trim(),
     }
-
-    const data = await response.json()
-    const normalized = normalizeQuizData(data?.quiz?.questions)
-    if (normalized.length > 0) {
-      localStorage.setItem('currentQuiz', JSON.stringify(normalized))
-      localStorage.setItem('currentQuizId', historyId)
-      return normalized
-    }
-
-    return loadStoredQuiz()
-  } catch (error) {
-    console.error('Failed to load quiz from history:', error)
-    return loadStoredQuiz()
-  }
+  }).filter((item) => item.question && item.options.length === 4 && item.options.every((option) => ['A', 'B', 'C', 'D'].includes(option.id)) && ['A', 'B', 'C', 'D'].includes(item.correctAnswer) && item.explanation)
 }
 
 const Quiz = () => {
   const router = useRouter()
-  const [questions, setQuestions] = useState<Question[]>(fallbackQuestions)
+  const [questions, setQuestions] = useState<Question[]>([])
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [selectedOption, setSelectedOption] = useState<string | null>(null)
   const [answers, setAnswers] = useState<Record<number, string>>({})
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean>(false)
-  const [showFeedback, setShowFeedback] = useState<boolean>(false)
-  const [quizStarted, setQuizStarted] = useState(false)
+  const [isAnswerCorrect, setIsAnswerCorrect] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
   const [isComplete, setIsComplete] = useState(false)
   const [score, setScore] = useState(0)
   const [showExplanation, setShowExplanation] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const startSoundRef = useRef<HTMLAudioElement | null>(null)
   const completeSoundRef = useRef<HTMLAudioElement | null>(null)
-  const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
     const loadQuiz = async () => {
-      const params = new URLSearchParams(window.location.search)
-      const historyId = params.get('historyId')
-
-      if (historyId) {
-        const historyQuiz = await loadHistoryQuiz(historyId)
-        setQuestions(historyQuiz)
-        return
+      try {
+        const params = new URLSearchParams(window.location.search)
+        const historyId = params.get('historyId')
+        let raw: unknown
+        if (historyId) {
+          const response = await fetch(`/api/quizzes/${historyId}`)
+          if (!response.ok) throw new Error('Unable to load this quiz.')
+          const data = await response.json()
+          raw = data?.quiz?.questions
+        } else {
+          const stored = localStorage.getItem('currentQuiz')
+          if (!stored) throw new Error('No generated quiz was found. Please upload a file first.')
+          raw = JSON.parse(stored)
+        }
+        const normalized = normalizeQuizData(raw)
+        if (!normalized.length) throw new Error('This quiz does not contain valid generated questions.')
+        setQuestions(normalized)
+      } catch (error) {
+        console.error('Failed to load quiz:', error)
+        setLoadError(error instanceof Error ? error.message : 'Failed to load quiz.')
       }
-
-      setQuestions(loadStoredQuiz())
     }
-
     loadQuiz()
   }, [])
 
-  // Check if mobile
   useEffect(() => {
-    const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
     checkMobile()
     window.addEventListener('resize', checkMobile)
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
+
+  useEffect(() => {
+    if (!questions.length) return
+    let correctCount = 0
+    questions.forEach((question) => {
+      if (answers[question.id] === question.correctAnswer) correctCount++
+    })
+    setScore(correctCount)
+  }, [answers, questions])
+
+  useEffect(() => {
+    startSoundRef.current = new Audio('/sounds/start.mp3')
+    completeSoundRef.current = new Audio('/sounds/complete.mp3')
+    startSoundRef.current.load()
+    completeSoundRef.current.load()
+    startSoundRef.current.play().catch(() => {})
+    return () => {
+      startSoundRef.current?.pause()
+      completeSoundRef.current?.pause()
+      startSoundRef.current = null
+      completeSoundRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!questions.length || isComplete) return
+    setShowFeedback(false)
+    setIsAnswerCorrect(false)
+    setShowExplanation(false)
+    setSelectedOption(answers[questions[currentQuestionIndex].id] || null)
+  }, [currentQuestionIndex, questions, isComplete])
+
+  if (loadError) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-white px-6 text-center">
+        <div className="max-w-md">
+          <h1 className="font-display text-2xl font-bold text-[#333333]">Unable to load quiz</h1>
+          <p className="mt-3 font-text text-sm text-[#737373]">{loadError}</p>
+          <button onClick={() => router.push('/dashboard')} className="mt-6 rounded-lg bg-[#4F4CF0] px-5 py-3 font-text text-sm font-bold text-white">Back to Dashboard</button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!questions.length) {
+    return <div className="flex h-screen w-full items-center justify-center bg-white font-text text-sm text-[#737373]">Loading quiz...</div>
+  }
 
   const currentQuestion = questions[currentQuestionIndex]
   const totalQuestions = questions.length
@@ -212,225 +138,66 @@ const Quiz = () => {
   const isLastQuestion = currentQuestionIndex === totalQuestions - 1
   const hasSelectedOption = selectedOption !== null
 
-  // Calculate score whenever answers change
-  useEffect(() => {
-    let correctCount = 0
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correctAnswer) {
-        correctCount++
-      }
-    })
-    setScore(correctCount)
-  }, [answers])
-
-  // Load sounds
-  useEffect(() => {
-    startSoundRef.current = new Audio('/sounds/start.mp3')
-    completeSoundRef.current = new Audio('/sounds/complete.mp3')
-    
-    startSoundRef.current.load()
-    completeSoundRef.current.load()
-    
-    if (startSoundRef.current) {
-      startSoundRef.current.play().catch(() => {})
-    }
-    setQuizStarted(true)
-
-    return () => {
-      if (startSoundRef.current) {
-        startSoundRef.current.pause()
-        startSoundRef.current = null
-      }
-      if (completeSoundRef.current) {
-        completeSoundRef.current.pause()
-        completeSoundRef.current = null
-      }
-    }
-  }, [])
-
-  const playCompleteSound = () => {
-    if (completeSoundRef.current) {
-      completeSoundRef.current.currentTime = 0
-      completeSoundRef.current.play().catch(() => {})
-    }
-  }
-
   const handleOptionToggle = (optionId: string) => {
     if (showFeedback) return
-    
-    const isSelected = selectedOption === optionId
-    const newSelected = isSelected ? null : optionId
-    setSelectedOption(newSelected)
-    
-    if (newSelected) {
-      setAnswers({
-        ...answers,
-        [currentQuestion.id]: newSelected,
-      })
-    } else {
-      const newAnswers = { ...answers }
-      delete newAnswers[currentQuestion.id]
-      setAnswers(newAnswers)
-    }
+    const next = selectedOption === optionId ? null : optionId
+    setSelectedOption(next)
+    if (next) setAnswers((previous) => ({ ...previous, [currentQuestion.id]: next }))
+    else setAnswers((previous) => { const nextAnswers = { ...previous }; delete nextAnswers[currentQuestion.id]; return nextAnswers })
   }
 
   const handleCheck = () => {
-    if (!hasSelectedOption) return
-    
-    const isCorrect = selectedOption === currentQuestion.correctAnswer
-    setIsAnswerCorrect(isCorrect)
+    if (!selectedOption) return
+    setIsAnswerCorrect(selectedOption === currentQuestion.correctAnswer)
     setShowFeedback(true)
   }
 
   const handleContinue = () => {
-    // Close explanation before continuing
     setShowExplanation(false)
     setShowFeedback(false)
-    setIsAnswerCorrect(false)
-    
     if (isLastQuestion) {
-      playCompleteSound()
+      completeSoundRef.current?.play().catch(() => {})
       setIsComplete(true)
-      console.log('Quiz complete!')
-    } else if (currentQuestionIndex < totalQuestions - 1) {
-      const nextIndex = currentQuestionIndex + 1
-      setCurrentQuestionIndex(nextIndex)
-      const savedAnswer = answers[nextIndex] || null
-      setSelectedOption(savedAnswer)
+      return
     }
-  }
-
-  const handleSkip = () => {
-    console.log('Skipped')
-  }
-
-  const handleExplain = () => {
-    setShowExplanation(true)
-  }
-
-  const handleCloseExplanation = () => {
-    setShowExplanation(false)
+    setCurrentQuestionIndex((index) => index + 1)
   }
 
   const handleRedo = () => {
-    const storedQuestions = loadStoredQuiz()
-
-    setQuestions(storedQuestions)
     setCurrentQuestionIndex(0)
     setSelectedOption(null)
     setAnswers({})
     setIsAnswerCorrect(false)
     setShowFeedback(false)
+    setShowExplanation(false)
     setIsComplete(false)
     setScore(0)
-    setShowExplanation(false)
-
-    if (startSoundRef.current) {
-      startSoundRef.current.currentTime = 0
-      startSoundRef.current.play().catch(() => {})
-    }
+    startSoundRef.current?.play().catch(() => {})
   }
 
-  const handleDone = () => {
-    router.push('/dashboard')
-  }
-
-  // Reset feedback when question changes
-  useEffect(() => {
-    if (!isComplete) {
-      setShowFeedback(false)
-      setIsAnswerCorrect(false)
-      const savedAnswer = answers[currentQuestion.id] || null
-      setSelectedOption(savedAnswer)
-    }
-  }, [currentQuestionIndex, currentQuestion.id, isComplete])
-
-  // If quiz is complete, show Finish component
-  if (isComplete) {
-    return (
-      <Finish
-        score={score}
-        totalQuestions={totalQuestions}
-        xpEarned={score * 10}
-        onRedo={handleRedo}
-        onDone={handleDone}
-      />
-    )
-  }
+  if (isComplete) return <Finish score={score} totalQuestions={totalQuestions} xpEarned={score * 10} onRedo={handleRedo} onDone={() => router.push('/dashboard')} />
 
   return (
-    <div className={cn(
-      'flex h-screen max-h-screen overflow-hidden bg-white',
-      // When explanation is open on desktop/tablet, use flex layout
-      showExplanation && !isMobile && 'flex-row'
-    )}>
-      {/* Quiz Content Container */}
-      <div className={cn(
-        'flex flex-col w-full h-full overflow-hidden',
-        // When explanation is open on desktop/tablet, shrink the quiz content
-        showExplanation && !isMobile && 'flex-1 min-w-0'
-      )}>
-        {/* Header */}
-        <div className='flex items-center justify-center w-full shrink-0 pt-4 sm:pt-[50px] pb-6 sm:pb-[86px] px-4 sm:px-6'>
-          <div className='flex items-center w-full max-w-[600px]'>
-            <Link 
-              href="/"
-              className="cursor-pointer hover:opacity-70 transition-opacity shrink-0"
-              aria-label="Go to home"
-            >
-              <CloseIcon color="#000000" />
-            </Link>
-
-            <div className="flex-1 ml-[12px] sm:ml-[21px]">
-              <Progress value={progressValue} />
-            </div>
+    <div className={cn('flex h-screen max-h-screen overflow-hidden bg-white', showExplanation && !isMobile && 'flex-row')}>
+      <div className={cn('flex h-full w-full flex-col overflow-hidden', showExplanation && !isMobile && 'min-w-0 flex-1')}>
+        <div className="flex w-full shrink-0 items-center justify-center px-4 pt-4 pb-6 sm:px-6 sm:pt-[50px] sm:pb-[86px]">
+          <div className="flex w-full max-w-[600px] items-center">
+            <Link href="/" className="shrink-0 cursor-pointer transition-opacity hover:opacity-70" aria-label="Go to home"><CloseIcon color="#000000" /></Link>
+            <div className="ml-[12px] flex-1 sm:ml-[21px]"><Progress value={progressValue} /></div>
           </div>
         </div>
 
-        {/* Question Section */}
-        <div className='flex flex-col items-center justify-center w-full max-w-[600px] mx-auto flex-1 min-h-0 px-4 sm:px-6 pb-4 sm:pb-8 lg:pb-12'>
-          <h2 className='font-display text-[#333333] text-[20px] sm:text-[24px] md:text-[28px] leading-[28px] sm:leading-[34px] md:leading-[40px] tracking-normal font-bold text-center mb-4 sm:mb-6 md:mb-8 px-2 sm:px-0'>
-            {currentQuestion.question}
-          </h2>
-
-          <div className='flex flex-col gap-2 w-full px-2 sm:px-0'>
-            {currentQuestion.options.map((option) => (
-              <QuizSelection
-                key={option.id}
-                label={option.label}
-                optionLetter={option.id}
-                selected={selectedOption === option.id}
-                onToggle={() => handleOptionToggle(option.id)}
-                disabled={showFeedback}
-              />
-            ))}
+        <div className="mx-auto flex min-h-0 w-full max-w-[600px] flex-1 flex-col items-center justify-center px-4 pb-4 sm:px-6 sm:pb-8 lg:pb-12">
+          <h2 className="mb-4 px-2 text-center font-display text-[20px] font-bold leading-[28px] text-[#333333] sm:mb-6 sm:px-0 sm:text-[24px] sm:leading-[34px] md:mb-8 md:text-[28px] md:leading-[40px]">{currentQuestion.question}</h2>
+          <div className="flex w-full flex-col gap-2 px-2 sm:px-0">
+            {currentQuestion.options.map((option) => <QuizSelection key={option.id} label={option.label} optionLetter={option.id} selected={selectedOption === option.id} onToggle={() => handleOptionToggle(option.id)} disabled={showFeedback} />)}
           </div>
         </div>
 
-        {/* Notice Component */}
-        <div className="shrink-0 mt-auto">
-          <Notice
-            onSkip={handleSkip}
-            onCheck={handleCheck}
-            onContinue={handleContinue}
-            onExplain={handleExplain}
-            isCorrect={isAnswerCorrect}
-            hasSelectedOption={hasSelectedOption}
-            showFeedback={showFeedback}
-          />
-        </div>
+        <div className="mt-auto shrink-0"><Notice onSkip={() => {}} onCheck={handleCheck} onContinue={handleContinue} onExplain={() => setShowExplanation(true)} isCorrect={isAnswerCorrect} hasSelectedOption={hasSelectedOption} showFeedback={showFeedback} /></div>
       </div>
 
-      {/* Explanation - Sidebar (Desktop/Tablet) or Bottom Sheet (Mobile) */}
-      {showExplanation && (
-        <Explanation
-          isOpen={showExplanation}
-          onClose={handleCloseExplanation}
-          explanation={currentQuestion.explanation}
-          fileType="pdf"
-          isSidebar={!isMobile}
-        />
-      )}
+      {showExplanation && <Explanation isOpen={showExplanation} onClose={() => setShowExplanation(false)} explanation={currentQuestion.explanation} fileType="pdf" isSidebar={!isMobile} />}
     </div>
   )
 }
