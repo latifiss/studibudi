@@ -71,7 +71,7 @@ const CookieBanner: React.FC<CookieBannerProps> = ({
 
             {/* Description */}
             <p className="text-sm text-muted leading-relaxed mb-5">
-              We use cookies to enhance your experience, analyze site traffic, and personalize content. By clicking "Accept", you consent to our use of cookies.
+              We use cookies to enhance your experience, analyze site traffic, and personalize content. By clicking &quot;Accept&quot;, you consent to our use of cookies.
             </p>
 
             {/* Buttons */}
@@ -80,7 +80,7 @@ const CookieBanner: React.FC<CookieBannerProps> = ({
                 onClick={handleAccept}
                 className={cn(
                   'flex-1 px-4 py-2.5 rounded-lg font-medium transition-all duration-200',
-                  'bg-[#7FF86C] text-black hover:opacity-90',
+                  'bg-black text-white hover:opacity-90',
                   'hover:scale-[1.02] active:scale-[0.98]'
                 )}
               >
