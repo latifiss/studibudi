@@ -81,8 +81,7 @@ export default function LayoutWrapper({
     pathname === '/dashboard'
 
   const showAltHeader =
-    pathname === '/profile' ||
-    pathname === '/'
+    pathname === '/profile' 
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
