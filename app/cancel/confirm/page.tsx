@@ -12,13 +12,11 @@ const ConfirmCancelPage = () => {
   }
 
   const handleProceedToCancel = () => {
-    // Call Paddle cancellation API
-    // For demo, simulate success
     router.push('/cancel/success')
   }
 
   return (
-    <ConfirmLeave 
+    <ConfirmLeave
       onKeepUsing={handleKeepUsing}
       onProceedToCancel={handleProceedToCancel}
     />
