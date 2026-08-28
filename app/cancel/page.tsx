@@ -13,7 +13,7 @@ const CancelPage = () => {
   }
 
   return (
-    <main className="h-full min-h-0 w-full overflow-hidden flex items-center justify-center">
+    <main className="h-full min-h-0 w-full overflow-hidden flex items-center justify-start">
       <LeaveFeedback onContinue={handleContinue} />
     </main>
   )
