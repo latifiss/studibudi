@@ -78,8 +78,7 @@ export default function LayoutWrapper({
     pathname === '/cancel/confirm' ||
     pathname === '/cancel' ||
     pathname === '/quiz' ||
-    pathname === '/dashboard' ||
-    pathname === '/'
+    pathname === '/dashboard'
 
   const showAltHeader =
     pathname === '/profile' ||
