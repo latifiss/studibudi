@@ -7,7 +7,7 @@ import { deleteR2Object, getR2Object, getR2ObjectMetadata } from '@/lib/storage/
 import { prisma } from '@/src/lib/db/prisma'
 
 export const runtime = 'nodejs'
-export const maxDuration = 60
+export const maxDuration = 300
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 
@@ -16,29 +16,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const session = await auth.api.getSession({ headers: req.headers })
-
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const [quizAllowed, uploadAllowed] = await Promise.all([
       canCreateQuiz(session.user.id),
       canUpload(session.user.id),
     ])
 
-    if (!quizAllowed) {
-      return NextResponse.json({
-        error: 'FREE_QUIZ_LIMIT_REACHED',
-        message: 'You have used your 2 free quizzes. Upgrade to Pro for unlimited quizzes.',
-      }, { status: 403 })
-    }
-
-    if (!uploadAllowed) {
-      return NextResponse.json({
-        error: 'FREE_UPLOAD_LIMIT_REACHED',
-        message: 'You have used your 2 free uploads. Upgrade to Pro for unlimited uploads.',
-      }, { status: 403 })
-    }
+    if (!quizAllowed) return NextResponse.json({ error: 'FREE_QUIZ_LIMIT_REACHED', message: 'You have used your 2 free quizzes. Upgrade to Pro for unlimited quizzes.' }, { status: 403 })
+    if (!uploadAllowed) return NextResponse.json({ error: 'FREE_UPLOAD_LIMIT_REACHED', message: 'You have used your 2 free uploads. Upgrade to Pro for unlimited uploads.' }, { status: 403 })
 
     const body = await req.json()
     const key = typeof body?.key === 'string' ? body.key : ''
@@ -50,27 +36,22 @@ export async function POST(req: NextRequest) {
     }
 
     uploadedKey = key
-
     const metadata = await getR2ObjectMetadata(key)
-    if ((metadata.ContentLength || 0) > MAX_FILE_SIZE) {
-      return NextResponse.json({ error: 'File size exceeds the 50MB limit.' }, { status: 413 })
-    }
+    const fileSize = metadata.ContentLength || 0
+    if (!fileSize) return NextResponse.json({ error: 'Uploaded file is empty.' }, { status: 400 })
+    if (fileSize > MAX_FILE_SIZE) return NextResponse.json({ error: 'File size exceeds the 50MB limit.' }, { status: 413 })
 
     const object = await getR2Object(key)
-    let text = ''
-
+    let text: string
     try {
       text = await extractTextFromBytes(object.bytes, fileName, object.contentType)
-    } catch (parseError) {
-      console.error('File parsing error:', parseError)
-      const message = parseError instanceof Error ? parseError.message : 'Failed to read the uploaded file.'
-      return NextResponse.json({ error: message }, { status: 400 })
+    } catch (error) {
+      console.error('File parsing error:', error)
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to read the uploaded file.' }, { status: 400 })
     }
 
     if (text.trim().length < 80) {
-      return NextResponse.json({
-        error: 'We could not extract enough readable text from this file. If it is scanned or image-only, please use a text-based PDF, DOCX, PPTX, TXT, CSV, XLS, or XLSX file.',
-      }, { status: 400 })
+      return NextResponse.json({ error: 'We could not extract enough readable text from this file. Please upload a text-based document.' }, { status: 400 })
     }
 
     const quiz = await generateQuizFromText(text, numQuestions)
@@ -89,8 +70,7 @@ export async function POST(req: NextRequest) {
     })
   } catch (error) {
     console.error('Quiz generation error:', error)
-    const message = error instanceof Error ? error.message : 'Failed to generate quiz.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to generate quiz.' }, { status: 500 })
   } finally {
     if (uploadedKey) await deleteR2Object(uploadedKey)
   }
