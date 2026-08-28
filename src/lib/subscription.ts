@@ -43,13 +43,28 @@ export async function getEntitlements(userId: string) {
 }
 
 export async function canCreateQuiz(userId: string) {
-  const entitlements = await getEntitlements(userId);
-  return entitlements.isPro || entitlements.quizzes.used < entitlements.quizzes.limit;
+  const [pro, quizCount] = await Promise.all([
+    isPro(userId),
+    prisma.quizHistory.count({ where: { userId } }),
+  ]);
+
+  return pro || quizCount < FREE_LIMITS.quizzes;
 }
 
 export async function canUpload(userId: string) {
-  const entitlements = await getEntitlements(userId);
-  return entitlements.isPro || entitlements.uploads.used < entitlements.uploads.limit;
+  // Upload preparation should only depend on the user's upload entitlement.
+  // Do not query QuizHistory here: an upload must be able to start even when
+  // quiz-history data is unavailable or has not yet been migrated.
+  const [pro, user] = await Promise.all([
+    isPro(userId),
+    prisma.user.findUnique({
+      where: { id: userId },
+      select: { uploadsUsed: true },
+    }),
+  ]);
+
+  if (pro) return true;
+  return (user?.uploadsUsed ?? 0) < FREE_LIMITS.uploads;
 }
 
 export async function requirePro(userId: string) {
