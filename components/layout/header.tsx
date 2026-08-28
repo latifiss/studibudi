@@ -6,8 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Menu } from 'lucide-react'
 import BaseButton from '@/components/ui/baseButton'
 import { Wordmark } from '@/public/icons/logo'
-import { GlobeIcon } from '@/public/icons/mono'
-import { ProfileIcon } from '@/public/icons/mono'
+import { GlobeIcon, ProfileIcon } from '@/public/icons/mono'
 import { useUser } from '@/hooks/use-user'
 import ProfileModal from '@/components/ui/profileModal'
 import Image from 'next/image'
@@ -27,7 +26,7 @@ const Header = () => {
   }
 
   const toggleMenu = () => {
-    setIsMenuOpen(!isMenuOpen)
+    setIsMenuOpen((prev) => !prev)
   }
 
   const handleProfileClick = () => {
@@ -45,7 +44,6 @@ const Header = () => {
     router.push('/upgrade')
   }
 
-  // Close profile modal when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -83,17 +81,13 @@ const Header = () => {
           <Wordmark className="text-foreground" />
         </Link>
 
-        {/* Desktop */}
         <div className="hidden sm:flex items-center gap-6">
-          <Link
-            href="/language"
-            className="flex items-center gap-2 cursor-pointer hover:opacity-70 transition-opacity"
-          >
+          <div className="flex items-center gap-2">
             <GlobeIcon className="text-foreground" />
             <span className="text-sm font-semibold text-foreground">
               Eng
             </span>
-          </Link>
+          </div>
 
           {authenticated ? (
             <button
@@ -137,17 +131,13 @@ const Header = () => {
           )}
         </div>
 
-        {/* Mobile */}
         <div className="flex sm:hidden items-center gap-4">
-          <Link
-            href="/language"
-            className="flex items-center gap-1 cursor-pointer hover:opacity-70 transition-opacity"
-          >
+          <div className="flex items-center gap-1">
             <GlobeIcon className="text-foreground w-4 h-4" />
             <span className="text-sm font-semibold text-foreground">
               En
             </span>
-          </Link>
+          </div>
 
           {authenticated ? (
             <button
@@ -178,17 +168,18 @@ const Header = () => {
             </Link>
           )}
 
-          <button
-            onClick={toggleMenu}
-            className="p-1 hover:opacity-70 transition-opacity"
-            aria-label="Toggle menu"
-          >
-            <Menu className="w-6 h-6 text-foreground" />
-          </button>
+          {!authenticated && (
+            <button
+              onClick={toggleMenu}
+              className="p-1 hover:opacity-70 transition-opacity"
+              aria-label="Toggle menu"
+            >
+              <Menu className="w-6 h-6 text-foreground" />
+            </button>
+          )}
         </div>
       </header>
 
-      {/* Mobile menu */}
       {isMenuOpen && !authenticated && (
         <div className="sm:hidden fixed top-18 left-0 right-0 bg-white border-b border-border z-40 px-4 py-6 shadow-lg">
           <div className="flex flex-col items-center gap-4">
@@ -203,7 +194,6 @@ const Header = () => {
         </div>
       )}
 
-      {/* Profile modal */}
       {authenticated && (
         <div id="header-profile-modal">
           <ProfileModal
