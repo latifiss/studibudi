@@ -11,6 +11,7 @@ const allowedRoutes = [
   '/',
   '/login',
   '/signin',
+  '/auth/success',
   '/not-found',
   '/terms',
   '/privacy',
@@ -44,7 +45,6 @@ export default function LayoutWrapper({
     }
   }, [isAllowedRoute, router])
 
-  // Don't render the unknown page while redirecting
   if (!isAllowedRoute) {
     return null
   }
@@ -52,6 +52,7 @@ export default function LayoutWrapper({
   const hideSidebar =
     pathname === '/login' ||
     pathname === '/signin' ||
+    pathname === '/auth/success' ||
     pathname === '/not-found' ||
     pathname === '/terms' ||
     pathname === '/privacy' ||
@@ -70,6 +71,7 @@ export default function LayoutWrapper({
   const hideHeader =
     pathname === '/login' ||
     pathname === '/signin' ||
+    pathname === '/auth/success' ||
     pathname === '/not-found' ||
     pathname === '/pro' ||
     pathname === '/upgrade' ||
@@ -81,7 +83,7 @@ export default function LayoutWrapper({
     pathname === '/dashboard'
 
   const showAltHeader =
-    pathname === '/profile' 
+    pathname === '/profile'
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
