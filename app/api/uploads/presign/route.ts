@@ -12,19 +12,26 @@ const ALLOWED_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'ppt', 'pptx', 'txt', 
 export async function POST(req: NextRequest) {
   try {
     const session = await auth.api.getSession({ headers: req.headers })
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     if (!(await canUpload(session.user.id))) {
-      return NextResponse.json({
-        error: 'FREE_UPLOAD_LIMIT_REACHED',
-        message: 'You have used your 2 free uploads. Upgrade to Pro for unlimited uploads.',
-      }, { status: 403 })
+      return NextResponse.json(
+        {
+          error: 'FREE_UPLOAD_LIMIT_REACHED',
+          message: 'You have used your 2 free uploads. Upgrade to Pro for unlimited uploads.',
+        },
+        { status: 403 },
+      )
     }
 
     const body = await req.json()
     const fileName = typeof body?.fileName === 'string' ? body.fileName.trim() : ''
     const fileSize = Number(body?.fileSize)
-    const contentType = typeof body?.contentType === 'string' ? body.contentType : 'application/octet-stream'
+    const contentType = typeof body?.contentType === 'string' && body.contentType.trim()
+      ? body.contentType.trim()
+      : 'application/octet-stream'
 
     if (!fileName || !Number.isFinite(fileSize) || fileSize <= 0) {
       return NextResponse.json({ error: 'Invalid file.' }, { status: 400 })
@@ -41,16 +48,26 @@ export async function POST(req: NextRequest) {
 
     const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(-120)
     const key = `uploads/${session.user.id}/${Date.now()}-${crypto.randomUUID()}-${safeName}`
+    const uploadUrl = await createR2UploadUrl(key, contentType)
 
     return NextResponse.json({
       success: true,
-      uploadUrl: createR2UploadUrl(key),
+      uploadUrl,
       key,
       maxFileSize: MAX_FILE_SIZE,
       contentType,
     })
   } catch (error) {
     console.error('Failed to create upload URL:', error)
-    return NextResponse.json({ error: 'Failed to prepare file upload.' }, { status: 500 })
+
+    const message = error instanceof Error ? error.message : 'Unknown R2 error'
+
+    return NextResponse.json(
+      {
+        error: 'Failed to prepare file upload.',
+        message,
+      },
+      { status: 500 },
+    )
   }
 }
