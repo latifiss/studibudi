@@ -38,9 +38,9 @@ const LeaveFeedback = ({ onContinue }: LeaveFeedbackProps) => {
   }
 
   return (
-    <div className='flex flex-col w-full h-screen max-h-screen overflow-hidden bg-[#000437] px-3 sm:px-0'>
-      <div className='flex items-center justify-start w-full h-14 sm:h-18 px-3 sm:px-9 shrink-0'>
-        <Link 
+    <div className="flex flex-col w-full h-full min-h-0 overflow-hidden bg-[#000437] px-3 sm:px-0">
+      <div className="flex items-center justify-start w-full h-14 sm:h-18 px-3 sm:px-9 shrink-0">
+        <Link
           href="/"
           className="cursor-pointer hover:opacity-70 transition-opacity"
           aria-label="Go to home"
@@ -49,13 +49,13 @@ const LeaveFeedback = ({ onContinue }: LeaveFeedbackProps) => {
         </Link>
       </div>
 
-      <div className='flex items-center justify-center w-full flex-1 min-h-0 py-4 sm:py-8 pb-0 sm:pb-20'>
-        <div className='flex flex-col w-full max-w-[400px] items-center justify-center h-full'>
-          <h1 className='font-display text-white text-xl sm:text-2xl md:text-3xl font-bold text-center mb-6 sm:mb-8 px-3 sm:px-0 shrink-0 whitespace-nowrap'>
+      <div className="flex items-center justify-center w-full flex-1 min-h-0 py-4 sm:py-8 pb-0 sm:pb-20">
+        <div className="flex flex-col w-full max-w-[400px] items-center justify-center h-full -mt-[30px]">
+          <h1 className="font-display text-white text-xl sm:text-2xl md:text-3xl font-bold text-center mb-6 sm:mb-8 px-3 sm:px-0 shrink-0 whitespace-nowrap">
             Why are you cancelling PRO?
           </h1>
 
-          <div className='flex flex-col w-full px-3 sm:px-0 shrink-0'>
+          <div className="flex flex-col w-full px-3 sm:px-0 shrink-0">
             {options.map((option, index) => {
               const isSelected = selectedId === option.id
               const isFirst = index === 0
@@ -68,7 +68,7 @@ const LeaveFeedback = ({ onContinue }: LeaveFeedbackProps) => {
                   {!isFirst && !isSelected && !isPrevSelected && (
                     <div className="h-[1px] bg-[#E5E5E5] w-full" />
                   )}
-                  
+
                   <button
                     onClick={() => handleSelect(option.id)}
                     className={cn(
@@ -77,13 +77,16 @@ const LeaveFeedback = ({ onContinue }: LeaveFeedbackProps) => {
                       'transition-colors duration-200 ease-in-out',
                       'bg-white text-[#333333]',
                       'border-2',
-                      isSelected ? 'border-[#84D8FF]' : 'border-transparent',
+                      isSelected
+                        ? 'border-[#84D8FF]'
+                        : 'border-transparent',
                       isSelected && 'bg-[#DDF4FF] text-[#1498D7]',
                       isFirst && 'rounded-t-2xl',
                       isLast && 'rounded-b-2xl',
                       !isFirst && 'rounded-t-none',
                       !isLast && 'rounded-b-none',
-                      !isSelected && 'hover:bg-gray-50'
+                      !isSelected && 'hover:bg-gray-50',
+                      'focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0'
                     )}
                   >
                     {option.label}
@@ -97,8 +100,8 @@ const LeaveFeedback = ({ onContinue }: LeaveFeedbackProps) => {
             })}
           </div>
 
-          <div className='flex flex-col items-center w-full px-3 sm:px-0 mt-6 sm:mt-8 shrink-0'>
-            <BaseButton 
+          <div className="flex flex-col items-center w-full px-3 sm:px-0 mt-6 sm:mt-8 shrink-0">
+            <BaseButton
               variant="alternate"
               onClick={handleContinue}
               disabled={!selectedId}
