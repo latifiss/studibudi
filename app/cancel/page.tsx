@@ -12,7 +12,11 @@ const CancelPage = () => {
     router.push('/cancel/confirm')
   }
 
-  return <LeaveFeedback onContinue={handleContinue} />
+  return (
+    <main className="h-full min-h-0 w-full overflow-hidden flex items-center justify-center">
+      <LeaveFeedback onContinue={handleContinue} />
+    </main>
+  )
 }
 
 export default CancelPage

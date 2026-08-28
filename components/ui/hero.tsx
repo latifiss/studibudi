@@ -48,7 +48,7 @@ const Hero = ({ className }: HeroProps) => {
             'max-w-90 sm:max-w-150.75 lg:max-w-116.25'
           )}
         >
-          Turn lectures, slides, or textbooks into personalized quizzes in seconds. No more manual flashcards. Get questions, answers, and explanations instantly—anytime, anywhere, no downloads needed.
+          Turn lectures, slides, or textbooks into personalized quizzes in seconds. No more manual flashcards. Get questions, answers, and explanations instantly and anytime, anywhere, no downloads needed.
         </p>
 
         <div className="w-full max-w-90 sm:max-w-113 lg:max-w-113 relative hidden lg:block">
