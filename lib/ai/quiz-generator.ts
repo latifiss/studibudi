@@ -1,4 +1,3 @@
-// lib/ai/quiz-generator.ts
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios'
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY?.trim()
@@ -9,197 +8,149 @@ const OPENROUTER_SITE_NAME = process.env.OPENROUTER_SITE_NAME || 'Studibudi'
 export interface Question {
   id: string
   question: string
-  options: {
-    id: string
-    label: string
-  }[]
+  options: { id: string; label: string }[]
   correctAnswer: string
   explanation: string
+  sourceReference?: string
 }
 
 export interface GeneratedQuiz {
   questions: Question[]
 }
 
-// Retry logic with exponential backoff
-async function fetchWithRetry(
-  url: string,
-  options: AxiosRequestConfig,
-  maxRetries: number = 3,
-  initialDelay: number = 1000
-): Promise<AxiosResponse> {
+async function fetchWithRetry(url: string, options: AxiosRequestConfig, maxRetries = 3): Promise<AxiosResponse> {
   let lastError: unknown
-
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
-      const response = await axios({
-        url,
-        ...options,
-        timeout: 30000, // 30 second timeout
-      })
-      return response
+      return await axios({ url, ...options, timeout: 55000 })
     } catch (error: unknown) {
       lastError = error
-
       if (axios.isAxiosError(error)) {
         const status = error.response?.status
-
-        // Don't retry on certain errors
-        if (status === 401 || status === 403) {
-          throw new Error('Invalid API key. Please check your OpenRouter configuration.')
+        if (status === 401 || status === 403) throw new Error('Invalid API key. Please check your OpenRouter configuration.')
+        if (status === 402) throw new Error('Insufficient OpenRouter balance. Please add credits and try again.')
+        const retryable = status === 408 || status === 429 || (status !== undefined && status >= 500) || ['ECONNRESET', 'ETIMEDOUT', 'ECONNABORTED'].includes(error.code || '')
+        if (retryable && attempt < maxRetries - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 1500 * 2 ** attempt))
+          continue
         }
-
-        if (status === 402) {
-          throw new Error('Insufficient balance. Please add credits to your OpenRouter account.')
-        }
-
-        // Only retry on network errors or 5xx errors
-        if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || (typeof status === 'number' && status >= 500)) {
-          if (attempt < maxRetries - 1) {
-            const delay = initialDelay * Math.pow(2, attempt)
-            console.log(`Retry ${attempt + 1}/${maxRetries} after ${delay}ms...`)
-            await new Promise(resolve => setTimeout(resolve, delay))
-            continue
-          }
-        }
+        const providerMessage = error.response?.data?.error?.message
+        throw new Error(providerMessage || error.message)
       }
-
       throw error
     }
   }
-
   throw lastError instanceof Error ? lastError : new Error('OpenRouter request failed')
 }
 
-export async function getAvailableModels(): Promise<Array<{ id: string; name: string; context_length: number; pricing: Record<string, unknown>; features?: string[] }>> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+const createChunks = (text: string, size = 12000, overlap = 1000) => {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return []
+  const chunks: string[] = []
+  let start = 0
+  while (start < normalized.length) {
+    const end = Math.min(normalized.length, start + size)
+    chunks.push(normalized.slice(start, end))
+    if (end >= normalized.length) break
+    start = end - overlap
   }
-
-  const response = await fetchWithRetry(
-    'https://openrouter.ai/api/v1/models',
-    {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'HTTP-Referer': OPENROUTER_SITE_URL,
-        'X-Title': OPENROUTER_SITE_NAME,
-        'Content-Type': 'application/json',
-      },
-    }
-  )
-
-  return response.data.data || []
+  return chunks
 }
 
-export async function generateQuizWithOpenRouter(
-  text: string,
-  numQuestions: number = 5,
-  model: string = OPENROUTER_MODEL
-): Promise<GeneratedQuiz> {
-  if (!OPENROUTER_API_KEY) {
-    throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+const buildStudyContext = (text: string, maxCharacters = 50000) => {
+  const chunks = createChunks(text)
+  if (text.length <= maxCharacters) return text.trim()
+  const selected: string[] = []
+  const count = Math.min(chunks.length, Math.max(4, Math.floor(maxCharacters / 11000)))
+  for (let i = 0; i < count; i++) {
+    const index = Math.floor((i * (chunks.length - 1)) / Math.max(1, count - 1))
+    selected.push(`[SECTION ${i + 1}]\n${chunks[index]}`)
   }
+  return selected.join('\n\n')
+}
 
-  // Truncate text if too long
-  const truncatedText = text.length > 8000 ? text.substring(0, 8000) + '...' : text
+const validateQuiz = (value: unknown, expectedQuestions: number): GeneratedQuiz => {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as GeneratedQuiz).questions)) {
+    throw new Error('The AI returned an invalid quiz structure.')
+  }
+  const questions = (value as GeneratedQuiz).questions.slice(0, expectedQuestions).map((question, index) => ({
+    id: String(question.id || index + 1),
+    question: String(question.question || '').trim(),
+    options: Array.isArray(question.options) ? question.options.slice(0, 4).map((option) => ({ id: String(option?.id || '').trim().toUpperCase(), label: String(option?.label || '').trim() })) : [],
+    correctAnswer: String(question.correctAnswer || '').trim().toUpperCase(),
+    explanation: String(question.explanation || '').trim(),
+    sourceReference: String(question.sourceReference || '').trim(),
+  }))
+  if (questions.length !== expectedQuestions || questions.some((question) => question.question.length < 10 || question.options.length !== 4 || question.options.some((option) => !option.id || !option.label) || !['A', 'B', 'C', 'D'].every((id) => question.options.some((option) => option.id === id)) || !question.options.some((option) => option.id === question.correctAnswer) || !question.explanation)) {
+    throw new Error('The AI returned incomplete quiz questions. Please try again.')
+  }
+  return { questions }
+}
 
-  const prompt = `
-You are an expert quiz generator for students. Create a multiple-choice quiz based on the following text.
+export async function generateQuizWithOpenRouter(text: string, numQuestions = 5, model = OPENROUTER_MODEL): Promise<GeneratedQuiz> {
+  if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+  const documentText = buildStudyContext(text)
+  const prompt = `Create a study quiz using ONLY the uploaded document below.
 
-Text: "${truncatedText}"
+Rules:
+- Every question must be answerable from the document.
+- Do not use general knowledge or information not present in the document.
+- Create exactly ${numQuestions} multiple-choice questions.
+- Every question must have exactly four options with IDs A, B, C, D.
+- Exactly one option must be correct.
+- Questions should cover different parts of the document where possible.
+- Explanations must explain the answer using facts from the document.
+- sourceReference must identify the supporting passage in a short quote or precise description, maximum 220 characters.
+- Never invent citations, page numbers, facts, names, dates, or statistics.
 
-Generate ${numQuestions} multiple-choice questions with exactly 4 options each (A, B, C, D).
-Each question must have one correct answer and a clear, helpful explanation.
-
-Requirements:
-1. Questions should test understanding, not just recall
-2. Make questions challenging but fair
-3. Explanations should teach why the correct answer is right and why others are wrong
-4. Use clear, concise language suitable for students
-
-Return ONLY valid JSON in this exact format:
+Return JSON only in this exact shape:
 {
   "questions": [
     {
-      "question": "What is the main topic of the text?",
+      "id": "1",
+      "question": "...",
       "options": [
-        { "id": "A", "label": "Option 1" },
-        { "id": "B", "label": "Option 2" },
-        { "id": "C", "label": "Option 3" },
-        { "id": "D", "label": "Option 4" }
+        {"id":"A","label":"..."},
+        {"id":"B","label":"..."},
+        {"id":"C","label":"..."},
+        {"id":"D","label":"..."}
       ],
-      "correctAnswer": "A",
-      "explanation": "The text clearly states that..."
+      "correctAnswer":"A",
+      "explanation":"...",
+      "sourceReference":"..."
     }
   ]
 }
-`
 
-  try {
-    const response = await fetchWithRetry(
-      'https://openrouter.ai/api/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'HTTP-Referer': OPENROUTER_SITE_URL,
-          'X-Title': OPENROUTER_SITE_NAME,
-          'Content-Type': 'application/json',
-        },
-        data: {
-          model: model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert quiz generator. Always return valid JSON. Never include any other text outside the JSON.',
-            },
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          temperature: 0.7,
-          max_tokens: 2000,
-          response_format: { type: 'json_object' },
-        },
-      }
-    )
+UPLOADED DOCUMENT
+${documentText}
+END DOCUMENT`
 
-    const content = response.data.choices[0]?.message?.content
-    if (!content) {
-      throw new Error('No content received from AI')
-    }
+  const response = await fetchWithRetry('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': OPENROUTER_SITE_URL,
+      'X-Title': OPENROUTER_SITE_NAME,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      model,
+      messages: [
+        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Never invent information outside the supplied document.' },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 5000,
+      response_format: { type: 'json_object' },
+    },
+  })
 
-    // Try to parse JSON response
-    let parsed
-    try {
-      parsed = JSON.parse(content)
-    } catch {
-      // Sometimes the AI returns JSON with markdown code blocks
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/)
-      if (jsonMatch) {
-        parsed = JSON.parse(jsonMatch[1])
-      } else {
-        throw new Error('Failed to parse AI response')
-      }
-    }
-
-    return parsed as GeneratedQuiz
-  } catch (error) {
-    console.error('OpenRouter error:', error)
-    if (axios.isAxiosError(error)) {
-      throw new Error(`OpenRouter API error: ${error.response?.data?.error?.message || error.message}`)
-    }
-    throw error
-  }
+  const content = response.data.choices?.[0]?.message?.content
+  if (!content) throw new Error('No content received from AI.')
+  return validateQuiz(JSON.parse(content), numQuestions)
 }
 
-export async function generateQuizFromText(
-  text: string,
-  numQuestions: number = 5,
-  model?: string
-): Promise<GeneratedQuiz> {
-  const selectedModel = model || OPENROUTER_MODEL
-  return generateQuizWithOpenRouter(text, numQuestions, selectedModel)
+export async function generateQuizFromText(text: string, numQuestions = 5, model?: string): Promise<GeneratedQuiz> {
+  return generateQuizWithOpenRouter(text, numQuestions, model || OPENROUTER_MODEL)
 }
