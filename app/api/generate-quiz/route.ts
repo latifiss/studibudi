@@ -1,15 +1,25 @@
-import { NextResponse } from 'next/server'
-import { NextRequest } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/src/lib/auth/auth'
 import { canCreateQuiz, canUpload } from '@/src/lib/subscription'
 import { generateQuizFromText } from '@/lib/ai/quiz-generator'
-import { extractTextFromFile } from '@/lib/utils/file-parser'
+import { extractTextFromBytes } from '@/lib/utils/file-parser'
+import { deleteR2Object, getR2Object, getR2ObjectMetadata } from '@/lib/storage/r2'
 import { prisma } from '@/src/lib/db/prisma'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+
 export async function POST(req: NextRequest) {
+  let uploadedKey: string | null = null
+
   try {
     const session = await auth.api.getSession({ headers: req.headers })
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const [quizAllowed, uploadAllowed] = await Promise.all([
       canCreateQuiz(session.user.id),
@@ -30,55 +40,58 @@ export async function POST(req: NextRequest) {
       }, { status: 403 })
     }
 
-    const formData = await req.formData()
-    const file = formData.get('file') as File
-    const numQuestions = parseInt(formData.get('numQuestions') as string) || 5
+    const body = await req.json()
+    const key = typeof body?.key === 'string' ? body.key : ''
+    const fileName = typeof body?.fileName === 'string' ? body.fileName : ''
+    const numQuestions = Math.min(20, Math.max(1, Number(body?.numQuestions) || 5))
 
-    if (!file) return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: 'File size exceeds 5MB limit. Please upload a smaller file.' }, { status: 400 })
+    if (!key || !fileName || !key.startsWith(`uploads/${session.user.id}/`)) {
+      return NextResponse.json({ error: 'Invalid uploaded file.' }, { status: 400 })
     }
 
-    let text
+    uploadedKey = key
+
+    const metadata = await getR2ObjectMetadata(key)
+    if ((metadata.ContentLength || 0) > MAX_FILE_SIZE) {
+      return NextResponse.json({ error: 'File size exceeds the 50MB limit.' }, { status: 413 })
+    }
+
+    const object = await getR2Object(key)
+    let text = ''
+
     try {
-      text = await extractTextFromFile(file)
+      text = await extractTextFromBytes(object.bytes, fileName, object.contentType)
     } catch (parseError) {
       console.error('File parsing error:', parseError)
-      return NextResponse.json({ error: 'Failed to read file. Please try a different format (PDF or TXT recommended).' }, { status: 400 })
+      const message = parseError instanceof Error ? parseError.message : 'Failed to read the uploaded file.'
+      return NextResponse.json({ error: message }, { status: 400 })
     }
 
-    if (!text || text.trim().length === 0) {
-      return NextResponse.json({ error: 'No text content found in the uploaded file. Please check the file content.' }, { status: 400 })
-    }
-
-    const maxTextLength = 10000
-    if (text.length > maxTextLength) text = text.substring(0, maxTextLength)
-
-    try {
-      const quiz = await Promise.race([
-        generateQuizFromText(text, numQuestions),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Request timeout - please try again')), 60000))
-      ]) as { questions: Array<{ question: string; options: Array<{ id: string; label: string }>; correctAnswer: string; explanation: string }> }
-
-      await prisma.user.update({
-        where: { id: session.user.id },
-        data: { uploadsUsed: { increment: 1 } },
-      })
-
+    if (text.trim().length < 80) {
       return NextResponse.json({
-        success: true,
-        quiz: quiz.questions,
-        totalQuestions: quiz.questions.length,
-        textLength: text.length,
-      })
-    } catch (aiError: unknown) {
-      console.error('AI generation error:', aiError)
-      const message = aiError instanceof Error ? aiError.message : 'Failed to generate quiz. Please try again.'
-      if (message.includes('ECONNRESET')) return NextResponse.json({ error: 'Connection timeout. Please try again.' }, { status: 504 })
-      return NextResponse.json({ error: message }, { status: 500 })
+        error: 'We could not extract enough readable text from this file. If it is scanned or image-only, please use a text-based PDF, DOCX, PPTX, TXT, CSV, XLS, or XLSX file.',
+      }, { status: 400 })
     }
+
+    const quiz = await generateQuizFromText(text, numQuestions)
+
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { uploadsUsed: { increment: 1 } },
+    })
+
+    return NextResponse.json({
+      success: true,
+      quiz: quiz.questions,
+      totalQuestions: quiz.questions.length,
+      textLength: text.length,
+      sourceName: fileName,
+    })
   } catch (error) {
     console.error('Quiz generation error:', error)
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Failed to generate quiz' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Failed to generate quiz.'
+    return NextResponse.json({ error: message }, { status: 500 })
+  } finally {
+    if (uploadedKey) await deleteR2Object(uploadedKey)
   }
 }
