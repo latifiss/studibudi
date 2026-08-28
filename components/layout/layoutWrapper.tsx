@@ -1,69 +1,89 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { useEffect } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import Header from './header'
 import AltHeader from './altHeader'
 import SidebarWrapper from './sidebarWrapper'
-// import Footer from '@/components/layout/footer'
 import CookieBanner from '../ui/cookieBanner'
 
-export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
+const allowedRoutes = [
+  '/',
+  '/login',
+  '/signin',
+  '/not-found',
+  '/terms',
+  '/privacy',
+  '/refund-policy',
+  '/cookie',
+  '/upgrade',
+  '/cancel',
+  '/cancel/success',
+  '/cancel/failed',
+  '/cancel/confirm',
+  '/pro',
+  '/quiz',
+  '/home',
+  '/profile',
+  '/dashboard',
+]
+
+export default function LayoutWrapper({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const pathname = usePathname()
-  
-  // Pages that should not show sidebar
-  const hideSidebar = pathname === '/blog' || 
-                      pathname === '/blog-detail' || 
-                      pathname === '/pricing' || 
-                      pathname === '/login' || 
-                      pathname === '/signin' || 
-                      pathname === '/onboarding' || 
-                      pathname === '/profile' ||
-                      pathname === '/not-found' ||
-                      pathname === '/terms' ||
-                      pathname === '/privacy' ||
-                      pathname === '/refund-policy' ||
-                      pathname === '/cookie' ||
-                      pathname === '/upgrade' ||
-                      pathname === '/cancel' ||
-                      pathname === '/cancel/success' ||
-                      pathname === '/cancel/failed' ||
-                      pathname === '/cancel/confirm' ||
-                      pathname === '/pro' ||
-                      pathname === '/quiz' ||
-                      pathname === '/home' ||
-                      pathname === '/intro' 
+  const router = useRouter()
 
-  // Pages that should not show header
-  const hideHeader = pathname === '/login' || 
-                     pathname === '/signin' ||
-                     pathname === '/not-found' ||
+  const isAllowedRoute = allowedRoutes.includes(pathname)
+
+  useEffect(() => {
+    if (!isAllowedRoute) {
+      router.replace('/not-found')
+    }
+  }, [isAllowedRoute, router])
+
+  // Don't render the unknown page while redirecting
+  if (!isAllowedRoute) {
+    return null
+  }
+
+  const hideSidebar =
+    pathname === '/login' ||
+    pathname === '/signin' ||
+    pathname === '/not-found' ||
+    pathname === '/terms' ||
+    pathname === '/privacy' ||
+    pathname === '/refund-policy' ||
+    pathname === '/cookie' ||
+    pathname === '/upgrade' ||
+    pathname === '/cancel' ||
+    pathname === '/cancel/success' ||
+    pathname === '/cancel/failed' ||
+    pathname === '/cancel/confirm' ||
     pathname === '/pro' ||
-     pathname === '/upgrade' ||
-                           pathname === '/cancel/success' ||
-                      pathname === '/cancel/failed' ||
-                      pathname === '/cancel/confirm' ||
-                      pathname === '/cancel' ||
-                     pathname === '/quiz' ||
-                     pathname === '/dashboard' ||
-                     pathname === '/intro' 
+    pathname === '/quiz' ||
+    pathname === '/home' ||
+    pathname === '/'
 
-  // Pages that should show AltHeader
-  const showAltHeader = pathname === '/blog' || 
-                        pathname === '/blog-detail' || 
-                        pathname === '/pricing' || 
-                        pathname === '/profile' ||
-                        pathname === '/intro' 
+  const hideHeader =
+    pathname === '/login' ||
+    pathname === '/signin' ||
+    pathname === '/not-found' ||
+    pathname === '/pro' ||
+    pathname === '/upgrade' ||
+    pathname === '/cancel/success' ||
+    pathname === '/cancel/failed' ||
+    pathname === '/cancel/confirm' ||
+    pathname === '/cancel' ||
+    pathname === '/quiz' ||
+    pathname === '/dashboard' ||
+    pathname === '/'
 
-  // Pages that should show footer
-  const showFooter = pathname === '/about' || 
-                     pathname === '/blog' || 
-                     pathname === '/blog-detail' || 
-                     pathname === '/pricing' ||
-                     pathname === '/terms' ||
-                     pathname === '/privacy' ||
-                     pathname === '/refund-policy' ||
-                     pathname === '/cookie' ||
-                     pathname === '/intro' 
+  const showAltHeader =
+    pathname === '/profile' ||
+    pathname === '/'
 
   return (
     <div className="flex flex-1 h-full overflow-hidden">
@@ -72,24 +92,18 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
           <SidebarWrapper />
         </div>
       )}
+
       <div className="flex-1 flex flex-col h-full overflow-hidden">
         <div className="flex-1 overflow-y-auto main-scroll-container scrollbar-thin scrollbar-track-transparent scrollbar-thumb-muted hover:scrollbar-thumb-foreground">
           {!hideHeader && (
-            <>
-              {showAltHeader ? (
-                <div className="sticky top-0 z-50">
-                  <AltHeader />
-                </div>
-              ) : (
-                <div className="sticky top-0 z-50">
-                  <Header />
-                </div>
-              )}
-            </>
+            <div className="sticky top-0 z-50">
+              {showAltHeader ? <AltHeader /> : <Header />}
+            </div>
           )}
+
           {children}
-          {/* {showFooter && <Footer />} */}
-          <CookieBanner 
+
+          <CookieBanner
             onAccept={() => console.log('Cookies accepted')}
             onReject={() => console.log('Cookies rejected')}
           />

@@ -21,7 +21,8 @@ const BaseButton = ({
     'font-text inline-flex items-center justify-center rounded-[8px]',
     'text-[13px] font-bold leading-[18px] tracking-normal uppercase',
     'transition-all duration-200 ease-in-out',
-    'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#4F4CF0]',
+    'focus:outline-none focus-visible:outline-none',
+    'focus:ring-0 focus-visible:ring-0 focus:ring-offset-0 focus-visible:ring-offset-0',
     'disabled:opacity-50 disabled:cursor-not-allowed',
     className
   )
@@ -106,7 +107,10 @@ const BaseButton = ({
     'before:shadow-[inset_0_-2px_0_0_rgba(0,0,0,0.1),inset_0_2px_0_0_rgba(255,255,255,0.25)]'
   )
 
-  const shouldApplyInnerShadow = variant !== 'ghost' && variant !== 'ghostLong' && variant !== 'hostLong'
+  const shouldApplyInnerShadow =
+    variant !== 'ghost' &&
+    variant !== 'ghostLong' &&
+    variant !== 'hostLong'
 
   return (
     <button
