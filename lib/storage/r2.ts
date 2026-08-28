@@ -14,8 +14,15 @@ const getConfig = (): R2Config => {
   const secretKey = process.env.R2_SECRET_KEY?.trim()
   const bucket = process.env.R2_BUCKET?.trim()
 
-  if (!endpoint || !accessKey || !secretKey || !bucket) {
-    throw new Error('R2 storage is not configured.')
+  const missing = [
+    !endpoint ? 'R2_ENDPOINT' : null,
+    !accessKey ? 'R2_ACCESS_KEY' : null,
+    !secretKey ? 'R2_SECRET_KEY' : null,
+    !bucket ? 'R2_BUCKET' : null,
+  ].filter((value): value is string => Boolean(value))
+
+  if (missing.length > 0) {
+    throw new Error(`R2 storage is not configured. Missing: ${missing.join(', ')}`)
   }
 
   return { endpoint, accessKey, secretKey, bucket }
@@ -28,7 +35,7 @@ const getClient = () => {
     config,
     client: new S3Client({
       region: 'auto',
-      endpoint: config.endpoint,
+      endpoint: config.endpoint.replace(/\/$/, ''),
       credentials: {
         accessKeyId: config.accessKey,
         secretAccessKey: config.secretKey,
@@ -50,9 +57,7 @@ export const createR2UploadUrl = async (
     ContentType: contentType,
   })
 
-  return getSignedUrl(client, command, {
-    expiresIn,
-  })
+  return getSignedUrl(client, command, { expiresIn })
 }
 
 export const getR2Object = async (key: string) => {
