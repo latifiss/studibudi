@@ -120,10 +120,10 @@ const ProUpgradeCard = ({ onSubscribe, onCancel }: ProUpgradeCardProps) => {
           <div className='flex flex-col items-center gap-3 sm:gap-3.5 mt-6 sm:mt-11.75 w-full px-3 sm:px-0 shrink-0'>
             <BaseButton 
               variant="long"
-              onClick={onSubscribe || (() => console.log('Subscribe to Pro'))}
+              onClick={onSubscribe || (() => console.log('Subscribe to Pro $4.99/month'))}
               className="w-full max-w-100 h-10 sm:h-10.5 text-[11px] sm:text-[13px]"
             >
-              Subscribe to Pro
+              Upgrade to Pro $4.99/mo
             </BaseButton>
             <button 
               onClick={onCancel || (() => console.log('Cancel'))}
