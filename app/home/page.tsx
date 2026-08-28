@@ -1,7 +1,6 @@
 'use client'
 
 import React from 'react'
-import Header from '@/components/layout/header'
 import Hero from '@/components/ui/hero'
 import School from '@/components/ui/school'
 import Detail from '@/components/ui/detail'
