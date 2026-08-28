@@ -29,11 +29,11 @@ const SignupPage = () => {
 
         <div className="flex flex-col items-center justify-center gap-6 w-full">
           <h1 className="text-3xl font-bold text-black font-display">
-            Create your account
+            Log into your account
           </h1>
 
           <p className="text-gray-600 text-center font-text">
-            Sign up to get started with our platform
+            Login to get started with our platform
           </p>
 
           <div className="flex flex-col gap-3 w-full mt-4">
@@ -83,7 +83,7 @@ const SignupPage = () => {
           </div>
 
           <p className="text-sm text-gray-500 mt-2 font-text">
-            Already have an account?{" "}
+            New here? Create an account?{" "}
             <Link
               href="/login"
               className="text-black font-medium hover:underline"
