@@ -1,192 +1,203 @@
-// lib/utils/file-parser.ts
+import * as XLSX from 'xlsx'
 
-/**
- * Extracts text content from uploaded files
- * Supports: PDF, DOC, DOCX, PPT, PPTX, TXT
- */
+export type ParsedFile = {
+  text: string
+  fileType: string
+}
 
 export async function extractTextFromFile(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const fileType = file.type
-  const fileName = file.name.toLowerCase()
-  const ext = fileName.split('.').pop() || ''
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  return extractTextFromBytes(bytes, file.name, file.type)
+}
 
-  // Check if it's a DOCX file (even if MIME type is wrong)
-  const isDocx = ext === 'docx' || fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const isDoc = ext === 'doc' || fileType === 'application/msword'
-  const isPdf = ext === 'pdf' || fileType === 'application/pdf'
-  const isPptx = ext === 'pptx' || fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  const isPpt = ext === 'ppt' || fileType === 'application/vnd.ms-powerpoint'
-  const isTxt = ext === 'txt' || fileType === 'text/plain'
+export async function extractTextFromBytes(
+  bytes: Uint8Array,
+  fileName: string,
+  mimeType = ''
+): Promise<string> {
+  const extension = fileName.split('.').pop()?.toLowerCase() || ''
 
-  try {
-    // Text files
-    if (isTxt) {
-      return extractTextFromTXT(buffer)
-    }
+  switch (extension) {
+    case 'txt':
+    case 'csv':
+      return new TextDecoder('utf-8').decode(bytes).trim()
 
-    // PDF files
-    if (isPdf) {
-      return await extractTextFromPDF(buffer)
-    }
+    case 'pdf':
+      return extractTextFromPDF(bytes)
 
-    // DOCX files
-    if (isDocx) {
-      return await extractTextFromDOCX(buffer)
-    }
+    case 'docx':
+      return extractTextFromDOCX(bytes)
 
-    // DOC files
-    if (isDoc) {
-      return await extractTextFromDOC(buffer)
-    }
+    case 'xlsx':
+    case 'xls':
+      return extractTextFromSpreadsheet(bytes)
 
-    // PPTX files
-    if (isPptx) {
-      return await extractTextFromPPTX(buffer)
-    }
+    case 'pptx':
+      return extractTextFromPPTX(bytes)
 
-    // PPT files
-    if (isPpt) {
-      return await extractTextFromPPT(buffer)
-    }
+    case 'doc':
+      throw new Error('Legacy .doc files are not supported yet. Please save the document as .docx or PDF and upload it again.')
 
-    throw new Error(`Unsupported file type: ${fileType || ext}`)
-  } catch (error) {
-    console.error(`Error parsing ${ext || fileType}:`, error)
-    // Return a helpful error message with suggestions
-    return getFallbackMessage(ext, fileType)
+    case 'ppt':
+      throw new Error('Legacy .ppt files are not supported yet. Please save the presentation as .pptx or PDF and upload it again.')
+
+    default:
+      throw new Error(`Unsupported file type: ${mimeType || extension || 'unknown'}`)
   }
 }
 
-/**
- * Extract text from TXT files
- */
-function extractTextFromTXT(buffer: ArrayBuffer): string {
-  return new TextDecoder('utf-8').decode(buffer)
+async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
+  const pdfParse = await import('pdf-parse')
+  const data = await pdfParse.default(Buffer.from(bytes))
+  return normalizeText(data.text)
 }
 
-/**
- * Extract text from PDF files using pdf-parse
- */
-async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
-  try {
-    // Dynamic import to avoid issues if pdf-parse is not installed
-    const pdfParse = await import('pdf-parse')
-    const data = await pdfParse.default(Buffer.from(buffer))
-    return data.text
-  } catch (error) {
-    console.error('PDF parsing error:', error)
-    // Fallback: try to read as text
-    const text = new TextDecoder('utf-8').decode(buffer)
-    if (text.trim().length > 0) {
-      return text
+async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
+  const mammoth = await import('mammoth')
+  const result = await mammoth.extractRawText({ arrayBuffer: toArrayBuffer(bytes) })
+  return normalizeText(result.value)
+}
+
+function extractTextFromSpreadsheet(bytes: Uint8Array): string {
+  const workbook = XLSX.read(Buffer.from(bytes), { type: 'buffer', cellText: true, cellDates: true })
+  const sections = workbook.SheetNames.map((sheetName) => {
+    const sheet = workbook.Sheets[sheetName]
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false, FS: ' | ' })
+    return `Sheet: ${sheetName}\n${csv}`
+  })
+
+  return normalizeText(sections.join('\n\n'))
+}
+
+async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
+  const zip = new SimpleZip(bytes)
+  const slideNames = zip.list().filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+
+  const orderedSlides = slideNames.sort((a, b) => {
+    const aNumber = Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0)
+    const bNumber = Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0)
+    return aNumber - bNumber
+  })
+
+  const sections: string[] = []
+
+  for (const slideName of orderedSlides) {
+    const xml = await zip.readText(slideName)
+    const text = [...xml.matchAll(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g)]
+      .map((match) => decodeXml(match[1]))
+      .join(' ')
+
+    if (text.trim()) {
+      sections.push(text.trim())
     }
-    throw new Error('Failed to parse PDF file. Please ensure the file is not corrupted or password protected.')
   }
+
+  return normalizeText(sections.join('\n\n'))
 }
 
-/**
- * Extract text from DOCX files using mammoth
- */
-async function extractTextFromDOCX(buffer: ArrayBuffer): Promise<string> {
-  try {
-    const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({ arrayBuffer: buffer })
-    if (result.value && result.value.trim().length > 0) {
-      return result.value
+function normalizeText(text: string): string {
+  return text
+    .replace(/\u0000/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim()
+}
+
+function decodeXml(value: string): string {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
+}
+
+class SimpleZip {
+  private readonly bytes: Uint8Array
+  private readonly entries = new Map<string, { method: number; compressedSize: number; uncompressedSize: number; offset: number }>()
+
+  constructor(bytes: Uint8Array) {
+    this.bytes = bytes
+    this.index()
+  }
+
+  list() {
+    return [...this.entries.keys()]
+  }
+
+  async readText(name: string) {
+    const entry = this.entries.get(name)
+    if (!entry) throw new Error(`ZIP entry not found: ${name}`)
+
+    const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength)
+    if (view.getUint32(entry.offset, true) !== 0x04034b50) {
+      throw new Error('Invalid ZIP local header.')
     }
-    // If mammoth returns empty, try converting to HTML and extract text
-    const htmlResult = await mammoth.convertToHtml({ arrayBuffer: buffer })
-    if (htmlResult.value) {
-      // Strip HTML tags to get plain text
-      const plainText = htmlResult.value.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
-      if (plainText.length > 0) {
-        return plainText
+
+    const nameLength = view.getUint16(entry.offset + 26, true)
+    const extraLength = view.getUint16(entry.offset + 28, true)
+    const dataStart = entry.offset + 30 + nameLength + extraLength
+    const compressed = this.bytes.slice(dataStart, dataStart + entry.compressedSize)
+
+    let output: Uint8Array
+
+    if (entry.method === 0) {
+      output = compressed
+    } else if (entry.method === 8) {
+      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
+      output = new Uint8Array(await new Response(stream).arrayBuffer())
+    } else {
+      throw new Error(`Unsupported ZIP compression method: ${entry.method}`)
+    }
+
+    return new TextDecoder('utf-8').decode(output)
+  }
+
+  private index() {
+    const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength)
+    const minimum = Math.max(0, this.bytes.length - 0xffff - 22)
+    let end = -1
+
+    for (let offset = this.bytes.length - 22; offset >= minimum; offset--) {
+      if (view.getUint32(offset, true) === 0x06054b50) {
+        end = offset
+        break
       }
     }
-    throw new Error('No text content found in DOCX file')
-  } catch (error) {
-    console.error('DOCX parsing error:', error)
-    // Try a simpler approach - sometimes DOCX is just XML
-    try {
-      const text = new TextDecoder('utf-8').decode(buffer)
-      // Look for text between tags
-      const matches = text.match(/>([^<]+)</g)
-      if (matches) {
-        const extracted = matches.map(m => m.replace(/[<>]/g, '').trim()).filter(s => s.length > 0).join(' ')
-        if (extracted.length > 0) {
-          return extracted
-        }
-      }
-    } catch {
-      // Fall through to error
+
+    if (end < 0) throw new Error('Invalid ZIP archive.')
+
+    const centralDirectorySize = view.getUint32(end + 12, true)
+    const centralDirectoryOffset = view.getUint32(end + 16, true)
+    let offset = centralDirectoryOffset
+    const endOffset = centralDirectoryOffset + centralDirectorySize
+
+    while (offset < endOffset) {
+      if (view.getUint32(offset, true) !== 0x02014b50) throw new Error('Invalid ZIP central directory.')
+
+      const method = view.getUint16(offset + 10, true)
+      const compressedSize = view.getUint32(offset + 20, true)
+      const uncompressedSize = view.getUint32(offset + 24, true)
+      const nameLength = view.getUint16(offset + 28, true)
+      const extraLength = view.getUint16(offset + 30, true)
+      const commentLength = view.getUint16(offset + 32, true)
+      const localOffset = view.getUint32(offset + 42, true)
+      const nameStart = offset + 46
+      const name = new TextDecoder('utf-8').decode(this.bytes.slice(nameStart, nameStart + nameLength))
+
+      this.entries.set(name, {
+        method,
+        compressedSize,
+        uncompressedSize,
+        offset: localOffset,
+      })
+
+      offset += 46 + nameLength + extraLength + commentLength
     }
-    throw new Error('Failed to parse DOCX file. Please try converting to PDF or TXT.')
   }
-}
-
-/**
- * Extract text from DOC files (older Word format)
- */
-async function extractTextFromDOC(buffer: ArrayBuffer): Promise<string> {
-  try {
-    // Try using mammoth for DOC as well (it supports some DOC files)
-    const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({ arrayBuffer: buffer })
-    if (result.value && result.value.trim().length > 0) {
-      return result.value
-    }
-    throw new Error('No text content found')
-  } catch {
-    // DOC files are difficult to parse. Give user a helpful message.
-    return 'DOC files are not fully supported. Please convert to DOCX, PDF, or TXT for best results.\n\nTip: Open the file in Word and save as DOCX or PDF.'
-  }
-}
-
-/**
- * Extract text from PPTX files
- */
-async function extractTextFromPPTX(buffer: ArrayBuffer): Promise<string> {
-  try {
-    // For PPTX, we'll try a simple text extraction from the XML
-    const text = new TextDecoder('utf-8').decode(buffer)
-    // Look for text in the XML
-    const matches = text.match(/>([^<]+)</g)
-    if (matches) {
-      const extracted = matches
-        .map(m => m.replace(/[<>]/g, '').trim())
-        .filter(s => s.length > 0)
-        .join(' ')
-      if (extracted.length > 0) {
-        return extracted
-      }
-    }
-    throw new Error('No text content found in PPTX')
-  } catch (error) {
-    console.error('PPTX parsing error:', error)
-    return 'PPTX files are not fully supported. Please convert to PDF or TXT for best results.'
-  }
-}
-
-/**
- * Extract text from PPT files (older PowerPoint format)
- */
-async function extractTextFromPPT(buffer: ArrayBuffer): Promise<string> {
-  // PPT files are OLE compound documents, very difficult to parse
-  return 'PPT files are not supported. Please convert to PDF, PPTX, or TXT for best results.'
-}
-
-/**
- * Get a fallback error message for unsupported files
- */
-function getFallbackMessage(ext: string, fileType: string): string {
-  const messages: Record<string, string> = {
-    'docx': 'DOCX parsing failed. Please try converting to PDF or TXT.',
-    'doc': 'DOC files are not fully supported. Please convert to DOCX, PDF, or TXT.',
-    'pptx': 'PPTX files are not fully supported. Please convert to PDF or TXT.',
-    'ppt': 'PPT files are not supported. Please convert to PDF, PPTX, or TXT.',
-    'pdf': 'PDF parsing failed. Please ensure the file is not password protected.',
-    'txt': 'Text file parsing failed.',
-  }
-  return messages[ext] || messages[fileType] || 'File parsing failed. Please try uploading a different file format (PDF or TXT recommended).'
 }
