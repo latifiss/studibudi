@@ -17,18 +17,12 @@ function toDate(value: unknown) {
 
 function mapStatus(status: string) {
   switch (status) {
-    case "active":
-      return "ACTIVE" as const;
-    case "trialing":
-      return "TRIALING" as const;
-    case "past_due":
-      return "PAST_DUE" as const;
-    case "paused":
-      return "PAUSED" as const;
-    case "canceled":
-      return "CANCELED" as const;
-    default:
-      return "CANCELED" as const;
+    case "active": return "ACTIVE" as const;
+    case "trialing": return "TRIALING" as const;
+    case "past_due": return "PAST_DUE" as const;
+    case "paused": return "PAUSED" as const;
+    case "canceled": return "CANCELED" as const;
+    default: return "CANCELED" as const;
   }
 }
 
@@ -54,75 +48,78 @@ export async function POST(request: Request) {
   }
 
   try {
-    await prisma.paddleWebhookEvent.create({
-      data: {
-        paddleEventId: event.eventId,
-        eventType: event.eventType,
-      },
+    await prisma.$transaction(async (tx) => {
+      const existingEvent = await tx.paddleWebhookEvent.findUnique({
+        where: { paddleEventId: event.eventId },
+      });
+
+      if (existingEvent) return;
+
+      const data = event.data ?? {};
+
+      if (event.eventType.startsWith("subscription.")) {
+        const customData = data.customData ?? {};
+        const userId = typeof customData.userId === "string" ? customData.userId : null;
+        const paddleSubscriptionId = data.id as string | undefined;
+
+        if (paddleSubscriptionId) {
+          const existingSubscription = await tx.subscription.findUnique({
+            where: { paddleSubscriptionId },
+          });
+
+          const resolvedUserId = userId ?? existingSubscription?.userId;
+
+          if (!resolvedUserId) {
+            console.error("Paddle subscription has no Studibudi user mapping", {
+              paddleSubscriptionId,
+              eventId: event.eventId,
+            });
+          } else {
+            const firstItem = data.items?.[0];
+            const billingPeriod = data.currentBillingPeriod;
+            const scheduledChange = data.scheduledChange;
+
+            await tx.subscription.upsert({
+              where: { userId: resolvedUserId },
+              create: {
+                userId: resolvedUserId,
+                paddleCustomerId: data.customerId ?? null,
+                paddleSubscriptionId,
+                paddlePriceId: firstItem?.price?.id ?? null,
+                paddleProductId: firstItem?.price?.productId ?? null,
+                plan: "PRO",
+                status: mapStatus(data.status),
+                currentPeriodStart: toDate(billingPeriod?.startsAt),
+                currentPeriodEnd: toDate(billingPeriod?.endsAt),
+                scheduledChangeAt: toDate(scheduledChange?.effectiveAt),
+                cancelAtPeriodEnd: scheduledChange?.action === "cancel",
+              },
+              update: {
+                paddleCustomerId: data.customerId ?? null,
+                paddlePriceId: firstItem?.price?.id ?? null,
+                paddleProductId: firstItem?.price?.productId ?? null,
+                status: mapStatus(data.status),
+                currentPeriodStart: toDate(billingPeriod?.startsAt),
+                currentPeriodEnd: toDate(billingPeriod?.endsAt),
+                scheduledChangeAt: toDate(scheduledChange?.effectiveAt),
+                cancelAtPeriodEnd: scheduledChange?.action === "cancel",
+              },
+            });
+          }
+        }
+      }
+
+      await tx.paddleWebhookEvent.create({
+        data: {
+          paddleEventId: event.eventId,
+          eventType: event.eventType,
+        },
+      });
     });
-  } catch {
-    // Paddle retries notifications. A unique event ID means we already handled it.
+
     return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error("Paddle webhook processing failed:", error);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
-
-  if (!event.eventType.startsWith("subscription.")) {
-    return NextResponse.json({ received: true });
-  }
-
-  const data = event.data ?? {};
-  const customData = data.customData ?? {};
-  const userId = typeof customData.userId === "string" ? customData.userId : null;
-  const paddleSubscriptionId = data.id as string | undefined;
-
-  if (!paddleSubscriptionId) {
-    return NextResponse.json({ received: true });
-  }
-
-  const existing = await prisma.subscription.findUnique({
-    where: { paddleSubscriptionId },
-  });
-
-  const resolvedUserId = userId ?? existing?.userId;
-  if (!resolvedUserId) {
-    console.error("Paddle subscription has no Studibudi user mapping", {
-      paddleSubscriptionId,
-      eventId: event.eventId,
-    });
-    return NextResponse.json({ received: true });
-  }
-
-  const firstItem = data.items?.[0];
-  const priceId = firstItem?.price?.id ?? null;
-  const productId = firstItem?.price?.productId ?? null;
-  const billingPeriod = data.currentBillingPeriod;
-  const scheduledChange = data.scheduledChange;
-
-  await prisma.subscription.upsert({
-    where: { userId: resolvedUserId },
-    create: {
-      userId: resolvedUserId,
-      paddleCustomerId: data.customerId ?? null,
-      paddleSubscriptionId,
-      paddlePriceId: priceId,
-      paddleProductId: productId,
-      plan: "PRO",
-      status: mapStatus(data.status),
-      currentPeriodStart: toDate(billingPeriod?.startsAt),
-      currentPeriodEnd: toDate(billingPeriod?.endsAt),
-      scheduledChangeAt: toDate(scheduledChange?.effectiveAt),
-      cancelAtPeriodEnd: scheduledChange?.action === "cancel",
-    },
-    update: {
-      paddleCustomerId: data.customerId ?? null,
-      paddlePriceId: priceId,
-      paddleProductId: productId,
-      status: mapStatus(data.status),
-      currentPeriodStart: toDate(billingPeriod?.startsAt),
-      currentPeriodEnd: toDate(billingPeriod?.endsAt),
-      scheduledChangeAt: toDate(scheduledChange?.effectiveAt),
-      cancelAtPeriodEnd: scheduledChange?.action === "cancel",
-    },
-  });
-
-  return NextResponse.json({ received: true });
 }
