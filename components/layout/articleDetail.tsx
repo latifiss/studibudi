@@ -1,6 +1,5 @@
 'use client'
 
-import ClockIcon from '@/public/icons/mono/clock'
 import Image from 'next/image'
 import React from 'react'
 import { TagType } from '@/components/ui/blogCard'
@@ -92,7 +91,6 @@ const ArticleDetail = ({
           <div className='flex items-center justify-start gap-4'>
             
             <div className='flex items-center justify-start gap-1'>
-                <ClockIcon size={16} color='#13151B' />
                 <time className='text-sm font-regular text-black' dateTime={date}>
                   {formattedDate}
                 </time>
