@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { initializePaddle, type Paddle } from "@paddle/paddle-js";
+import BaseButton from "@/components/ui/baseButton";
 
 export default function PaddleUpgradeButton({
   userId,
@@ -17,6 +18,7 @@ export default function PaddleUpgradeButton({
 
   useEffect(() => {
     const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
+
     if (!token) {
       console.error("NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is not configured");
       setLoading(false);
@@ -37,6 +39,7 @@ export default function PaddleUpgradeButton({
 
   const openCheckout = () => {
     const priceId = process.env.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID;
+
     if (!paddle || !priceId) return;
 
     paddle.Checkout.open({
@@ -51,13 +54,14 @@ export default function PaddleUpgradeButton({
   };
 
   return (
-    <button
+    <BaseButton
       type="button"
+      variant="long"
       onClick={openCheckout}
       disabled={loading || !paddle}
       className={className}
     >
       {loading ? "Loading..." : children}
-    </button>
+    </BaseButton>
   );
 }
