@@ -1,74 +1,108 @@
-import crypto from 'node:crypto'
-import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { DeleteObjectCommand, GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-type R2Config = { endpoint: string; accessKey: string; secretKey: string; bucket: string }
+type R2Config = {
+  endpoint: string
+  accessKey: string
+  secretKey: string
+  bucket: string
+}
 
 const getConfig = (): R2Config => {
   const endpoint = process.env.R2_ENDPOINT?.trim()
   const accessKey = process.env.R2_ACCESS_KEY?.trim()
   const secretKey = process.env.R2_SECRET_KEY?.trim()
   const bucket = process.env.R2_BUCKET?.trim()
-  if (!endpoint || !accessKey || !secretKey || !bucket) throw new Error('R2 storage is not configured.')
+
+  const missing = [
+    !endpoint ? 'R2_ENDPOINT' : null,
+    !accessKey ? 'R2_ACCESS_KEY' : null,
+    !secretKey ? 'R2_SECRET_KEY' : null,
+    !bucket ? 'R2_BUCKET' : null,
+  ].filter((value): value is string => Boolean(value))
+
+  if (missing.length > 0) {
+    throw new Error(`R2 storage is not configured. Missing: ${missing.join(', ')}`)
+  }
+
   return { endpoint, accessKey, secretKey, bucket }
 }
 
 const getClient = () => {
   const config = getConfig()
+
   return {
     config,
-    client: new S3Client({ region: 'auto', endpoint: config.endpoint, credentials: { accessKeyId: config.accessKey, secretAccessKey: config.secretKey } }),
+    client: new S3Client({
+      region: 'auto',
+      endpoint: config.endpoint.replace(/\/$/, ''),
+      credentials: {
+        accessKeyId: config.accessKey,
+        secretAccessKey: config.secretKey,
+      },
+    }),
   }
 }
 
-const awsEncode = (value: string) => encodeURIComponent(value).replace(/[!'()*]/g, (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`)
-const hmac = (key: Buffer | string, value: string) => crypto.createHmac('sha256', key).update(value).digest()
-const formatAmzDate = (date: Date) => `${date.toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`
+export const createR2UploadUrl = async (
+  key: string,
+  contentType = 'application/octet-stream',
+  expiresIn = 900,
+) => {
+  const { client, config } = getClient()
 
-export const createR2UploadUrl = (key: string, expiresIn = 900) => {
-  const { endpoint, accessKey, secretKey, bucket } = getConfig()
-  const endpointUrl = new URL(endpoint)
-  const host = endpointUrl.host
-  const now = new Date()
-  const amzDate = formatAmzDate(now)
-  const shortDate = amzDate.slice(0, 8)
-  const credentialScope = `${shortDate}/auto/s3/aws4_request`
-  const canonicalUri = `/${awsEncode(bucket)}/${key.split('/').map(awsEncode).join('/')}`
+  const command = new PutObjectCommand({
+    Bucket: config.bucket,
+    Key: key,
+    ContentType: contentType,
+  })
 
-  const query: Record<string, string> = {
-    'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
-    'X-Amz-Credential': `${accessKey}/${credentialScope}`,
-    'X-Amz-Date': amzDate,
-    'X-Amz-Expires': String(expiresIn),
-    'X-Amz-SignedHeaders': 'host',
-  }
-
-  const canonicalQuery = Object.entries(query).sort(([a], [b]) => a.localeCompare(b)).map(([name, value]) => `${awsEncode(name)}=${awsEncode(value)}`).join('&')
-  const canonicalRequest = ['PUT', canonicalUri, canonicalQuery, `host:${host}\n`, 'host', 'UNSIGNED-PAYLOAD'].join('\n')
-  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope, crypto.createHash('sha256').update(canonicalRequest).digest('hex')].join('\n')
-  const signingKey = hmac(hmac(hmac(`AWS4${secretKey}`, shortDate), 'auto'), 's3')
-  const finalKey = hmac(signingKey, 'aws4_request')
-  const signature = crypto.createHmac('sha256', finalKey).update(stringToSign).digest('hex')
-
-  return `${endpointUrl.origin}${canonicalUri}?${canonicalQuery}&X-Amz-Signature=${signature}`
+  return getSignedUrl(client, command, { expiresIn })
 }
 
 export const getR2Object = async (key: string) => {
   const { client, config } = getClient()
-  const response = await client.send(new GetObjectCommand({ Bucket: config.bucket, Key: key }))
-  if (!response.Body) throw new Error('Uploaded file could not be read from storage.')
+  const response = await client.send(
+    new GetObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+    }),
+  )
+
+  if (!response.Body) {
+    throw new Error('Uploaded file could not be read from storage.')
+  }
+
   const bytes = await response.Body.transformToByteArray()
-  return { bytes, contentType: response.ContentType || 'application/octet-stream', contentLength: response.ContentLength ?? bytes.byteLength }
+
+  return {
+    bytes,
+    contentType: response.ContentType || 'application/octet-stream',
+    contentLength: response.ContentLength ?? bytes.byteLength,
+  }
 }
 
 export const getR2ObjectMetadata = async (key: string) => {
   const { client, config } = getClient()
-  return client.send(new HeadObjectCommand({ Bucket: config.bucket, Key: key }))
+
+  return client.send(
+    new HeadObjectCommand({
+      Bucket: config.bucket,
+      Key: key,
+    }),
+  )
 }
 
 export const deleteR2Object = async (key: string) => {
   try {
     const { client, config } = getClient()
-    await client.send(new DeleteObjectCommand({ Bucket: config.bucket, Key: key }))
+
+    await client.send(
+      new DeleteObjectCommand({
+        Bucket: config.bucket,
+        Key: key,
+      }),
+    )
   } catch (error) {
     console.error('Failed to delete R2 object:', error)
   }
