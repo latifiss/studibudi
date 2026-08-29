@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Menu } from 'lucide-react'
 import BaseButton from '@/components/ui/baseButton'
 import { Wordmark } from '@/public/icons/logo'
@@ -13,21 +13,21 @@ import Image from 'next/image'
 
 const Header = () => {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, authenticated, logout } = useUser()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [tier, setTier] = useState<'free' | 'pro'>('free')
   const profileRef = useRef<HTMLButtonElement>(null)
 
-  const refreshEntitlements = async (retries = 1) => {
-    if (!authenticated) { setTier('free'); return }
+  const refreshEntitlements = async () => {
+    if (!authenticated) { setTier('free'); return false }
     try {
       const response = await fetch('/api/billing/entitlements', { cache: 'no-store' })
-      if (!response.ok) return
+      if (!response.ok) return false
       const data = await response.json()
-      setTier(data?.isPro ? 'pro' : 'free')
-      return Boolean(data?.isPro)
+      const isPro = Boolean(data?.isPro)
+      setTier(isPro ? 'pro' : 'free')
+      return isPro
     } catch { return false }
   }
 
@@ -35,22 +35,22 @@ const Header = () => {
     refreshEntitlements()
   }, [authenticated])
 
-  // Paddle can return before the webhook has finished updating Prisma. Poll briefly
-  // after a successful checkout so the UI switches to PRO without requiring a
-  // manual refresh. The webhook remains the source of truth.
+  // Refresh periodically while the user is on the app. This also handles the
+  // short delay between Paddle checkout completion and webhook processing.
   useEffect(() => {
-    if (!authenticated || searchParams.get('payment') !== 'success') return
+    if (!authenticated) return
     let cancelled = false
     let attempts = 0
     const poll = async () => {
       if (cancelled) return
       attempts += 1
       const isPro = await refreshEntitlements()
+      // Poll for a short period after mount, which covers the normal webhook delay.
       if (!isPro && attempts < 12) window.setTimeout(poll, 1500)
     }
     poll()
     return () => { cancelled = true }
-  }, [authenticated, searchParams])
+  }, [authenticated])
 
   const handleGetStarted = () => { router.push('/get-started'); setIsMenuOpen(false) }
   const toggleMenu = () => setIsMenuOpen((prev) => !prev)
@@ -61,7 +61,6 @@ const Header = () => {
     const response = await fetch('/api/billing/cancel', { method: 'POST' })
     const data = await response.json().catch(() => null)
     if (!response.ok) throw new Error(data?.message || 'Unable to cancel subscription.')
-    setTier('pro')
     await refreshEntitlements()
   }
 
