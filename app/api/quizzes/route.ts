@@ -37,11 +37,19 @@ export async function POST(req: Request) {
     const questions = Array.isArray(body?.questions) ? body.questions : []
     if (!questions.length) return NextResponse.json({ error: 'No quiz questions provided' }, { status: 400 })
 
+    const sourceName = typeof body?.sourceName === 'string' && body.sourceName.trim()
+      ? body.sourceName.trim()
+      : 'Study Material'
+    const suppliedTitle = typeof body?.title === 'string' ? body.title.trim() : ''
+    const title = suppliedTitle && suppliedTitle !== sourceName
+      ? suppliedTitle.slice(0, 70)
+      : sourceName.replace(/\.[^/.]+$/, '').slice(0, 70) || 'Study Session'
+
     const quiz = await prisma.quizHistory.create({
       data: {
         userId: session.user.id,
-        title: typeof body?.title === 'string' && body.title.trim() ? body.title : `Quiz ${new Date().toLocaleDateString()}`,
-        sourceName: typeof body?.sourceName === 'string' && body.sourceName.trim() ? body.sourceName : 'Uploaded file',
+        title,
+        sourceName,
         totalQuestions: questions.length,
         questions: questions as any,
       },

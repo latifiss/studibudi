@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+
+  serverExternalPackages: ['unpdf'],
+
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
@@ -14,9 +17,11 @@ const nextConfig: NextConfig = {
     ],
     unoptimized: true,
   },
+
   turbopack: {
     root: __dirname,
   },
+
   async headers() {
     return [
       {
