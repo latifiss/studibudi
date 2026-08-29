@@ -43,7 +43,7 @@ const Quiz = () => {
   useEffect(() => { if (!questions.length || isComplete) return; setShowFeedback(false); setIsAnswerCorrect(false); setShowExplanation(false); setSelectedOption(answers[questions[currentQuestionIndex].id] || null) }, [currentQuestionIndex, questions, isComplete])
 
   if (loadError) return <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-white px-6 text-center"><div className="max-w-md"><h1 className="font-display text-2xl font-bold text-[#333333]">Unable to load quiz</h1><p className="mt-3 font-text text-sm text-[#737373]">{loadError}</p><button onClick={() => router.push('/dashboard')} className="mt-6 rounded-lg bg-[#4F4CF0] px-5 py-3 font-text text-sm font-bold text-white">Back to Dashboard</button></div></div>
-  if (!questions.length) return <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-white font-text text-sm text-[#737373]">Loading quiz...</div>
+  if (!questions.length) return <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-white font-text text-sm text-[#737373]">displaying quiz soon😊</div>
 
   const currentQuestion = questions[currentQuestionIndex]
   const totalQuestions = questions.length
