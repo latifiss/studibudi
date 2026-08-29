@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { ProfileIcon } from '@/public/icons/mono'
@@ -36,6 +36,7 @@ const ProfileModal = ({
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [liveTier, setLiveTier] = useState<'free' | 'pro'>(tier)
   const [mounted, setMounted] = useState(false)
+  const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -50,25 +51,52 @@ const ProfileModal = ({
     if (!isOpen) return
 
     const updatePosition = () => {
-      const rect = anchorRef?.current?.getBoundingClientRect()
-      if (!rect) return
+      const anchor = anchorRef?.current
+      const modal = modalRef.current
+      if (!anchor) return
 
-      // Align the modal's right edge with the profile/header anchor.
+      const rect = anchor.getBoundingClientRect()
+      const modalHeight = modal?.getBoundingClientRect().height ?? 210
+      const gap = 8
+
+      // Header profiles have room below. Sidebar profiles live at the
+      // bottom of the viewport, so place the modal above them when needed.
+      const spaceBelow = window.innerHeight - rect.bottom
+      const top = spaceBelow >= modalHeight + gap
+        ? rect.bottom + gap
+        : Math.max(8, rect.top - modalHeight - gap)
+
       setPosition({
-        top: rect.bottom + 8,
+        top,
         right: Math.max(12, window.innerWidth - rect.right),
       })
     }
 
     updatePosition()
+    const frame = window.requestAnimationFrame(updatePosition)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
 
     return () => {
+      window.cancelAnimationFrame(frame)
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
   }, [isOpen, anchorRef])
+
+  useEffect(() => {
+    if (!isOpen) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node
+      if (anchorRef?.current?.contains(target)) return
+      if (modalRef.current?.contains(target)) return
+      onClose()
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [isOpen, anchorRef, onClose])
 
   useEffect(() => {
     if (!isOpen) return
@@ -118,7 +146,7 @@ const ProfileModal = ({
 
   return createPortal(
     <div
-      id="profile-modal"
+      ref={modalRef}
       data-profile-modal="true"
       className="fixed z-[9999] w-70"
       style={{ top: position.top, right: position.right }}
