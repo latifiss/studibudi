@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { CloseIcon } from '@/public/icons/mono'
@@ -118,7 +117,7 @@ const Quiz = () => {
 
   if (loadError) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-white px-6 text-center">
+      <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-white px-6 text-center">
         <div className="max-w-md">
           <h1 className="font-display text-2xl font-bold text-[#333333]">Unable to load quiz</h1>
           <p className="mt-3 font-text text-sm text-[#737373]">{loadError}</p>
@@ -129,7 +128,7 @@ const Quiz = () => {
   }
 
   if (!questions.length) {
-    return <div className="flex h-screen w-full items-center justify-center bg-white font-text text-sm text-[#737373]">Loading quiz...</div>
+    return <div className="flex h-dvh w-full items-center justify-center overflow-hidden bg-white font-text text-sm text-[#737373]">Loading quiz...</div>
   }
 
   const currentQuestion = questions[currentQuestionIndex]
@@ -178,26 +177,64 @@ const Quiz = () => {
   if (isComplete) return <Finish score={score} totalQuestions={totalQuestions} xpEarned={score * 10} onRedo={handleRedo} onDone={() => router.push('/dashboard')} />
 
   return (
-    <div className={cn('flex h-screen max-h-screen overflow-hidden bg-white', showExplanation && !isMobile && 'flex-row')}>
-      <div className={cn('flex h-full w-full flex-col overflow-hidden', showExplanation && !isMobile && 'min-w-0 flex-1')}>
-        <div className="flex w-full shrink-0 items-center justify-center px-4 pt-4 pb-6 sm:px-6 sm:pt-[50px] sm:pb-[86px]">
+    <div className="flex h-dvh min-h-0 max-h-dvh w-full overflow-hidden bg-white">
+      <div className={cn('flex h-full min-h-0 w-full flex-col overflow-hidden', showExplanation && !isMobile && 'min-w-0 flex-1')}>
+        <header className="flex h-[72px] w-full shrink-0 items-center justify-center px-4 sm:h-[96px] sm:px-6 md:h-[104px]">
           <div className="flex w-full max-w-[600px] items-center">
-            <Link href="/" className="shrink-0 cursor-pointer transition-opacity hover:opacity-70" aria-label="Go to home"><CloseIcon color="#000000" /></Link>
-            <div className="ml-[12px] flex-1 sm:ml-[21px]"><Progress value={progressValue} /></div>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              className="flex shrink-0 cursor-pointer items-center justify-center transition-opacity hover:opacity-70"
+              aria-label="Close quiz and return to dashboard"
+            >
+              <CloseIcon color="#000000" />
+            </button>
+            <div className="ml-[12px] min-w-0 flex-1 sm:ml-[21px]">
+              <Progress value={progressValue} />
+            </div>
           </div>
-        </div>
+        </header>
 
-        <div className="mx-auto flex min-h-0 w-full max-w-[600px] flex-1 flex-col items-center justify-center px-4 pb-4 sm:px-6 sm:pb-8 lg:pb-12">
-          <h2 className="mb-4 px-2 text-center font-display text-[20px] font-bold leading-[28px] text-[#333333] sm:mb-6 sm:px-0 sm:text-[24px] sm:leading-[34px] md:mb-8 md:text-[28px] md:leading-[40px]">{currentQuestion.question}</h2>
-          <div className="flex w-full flex-col gap-2 px-2 sm:px-0">
-            {currentQuestion.options.map((option) => <QuizSelection key={option.id} label={option.label} optionLetter={option.id} selected={selectedOption === option.id} onToggle={() => handleOptionToggle(option.id)} disabled={showFeedback} />)}
+        <main className="mx-auto flex min-h-0 w-full max-w-[600px] flex-1 flex-col items-center justify-center overflow-hidden px-4 py-2 sm:px-6 sm:py-4 md:py-5">
+          <h2 className="mb-3 line-clamp-3 w-full shrink-0 overflow-hidden px-2 text-center font-display text-[20px] font-bold leading-[27px] text-[#333333] sm:mb-5 sm:px-0 sm:text-[24px] sm:leading-[34px] md:mb-6 md:text-[28px] md:leading-[38px]">
+            {currentQuestion.question}
+          </h2>
+          <div className="flex min-h-0 w-full shrink flex-col gap-2 overflow-hidden px-2 sm:px-0">
+            {currentQuestion.options.map((option) => (
+              <QuizSelection
+                key={option.id}
+                label={option.label}
+                optionLetter={option.id}
+                selected={selectedOption === option.id}
+                onToggle={() => handleOptionToggle(option.id)}
+                disabled={showFeedback}
+              />
+            ))}
           </div>
-        </div>
+        </main>
 
-        <div className="mt-auto shrink-0"><Notice onSkip={() => {}} onCheck={handleCheck} onContinue={handleContinue} onExplain={() => setShowExplanation(true)} isCorrect={isAnswerCorrect} hasSelectedOption={hasSelectedOption} showFeedback={showFeedback} /></div>
+        <div className="w-full shrink-0">
+          <Notice
+            onSkip={() => {}}
+            onCheck={handleCheck}
+            onContinue={handleContinue}
+            onExplain={() => setShowExplanation(true)}
+            isCorrect={isAnswerCorrect}
+            hasSelectedOption={hasSelectedOption}
+            showFeedback={showFeedback}
+          />
+        </div>
       </div>
 
-      {showExplanation && <Explanation isOpen={showExplanation} onClose={() => setShowExplanation(false)} explanation={currentQuestion.explanation} fileType="pdf" isSidebar={!isMobile} />}
+      {showExplanation && (
+        <Explanation
+          isOpen={showExplanation}
+          onClose={() => setShowExplanation(false)}
+          explanation={currentQuestion.explanation}
+          fileType="pdf"
+          isSidebar={!isMobile}
+        />
+      )}
     </div>
   )
 }
