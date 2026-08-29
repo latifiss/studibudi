@@ -6,16 +6,12 @@ interface SidebarHeadProps {
   className?: string
 }
 
-const SidebarHead = ({
-  label,
-  className,
-  ...props
-}: SidebarHeadProps) => {
+const SidebarHead = ({ label, className, ...props }: SidebarHeadProps) => {
   return (
     <div
       className={cn(
         'w-full px-2 py-0',
-        'font-text text-[10px] leading-auto',
+        'font-text text-[14px] font-semibold leading-auto',
         'bg-transparent text-[#B5B5B5] dark:text-[#6B6B6B]',
         'transition-colors duration-200',
         className
