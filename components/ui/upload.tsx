@@ -103,8 +103,8 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
           <div className={cn('flex flex-col items-center justify-center w-full h-full', isAlternate ? 'max-w-[320px]' : 'max-w-[189.98px] sm:max-w-[320px] lg:max-w-[320px]')}>
             <div className={cn('flex items-center justify-center', isAlternate ? 'w-[80px] h-[80px] sm:w-[100px] sm:h-[100px] lg:w-[140px] lg:h-[140px]' : 'w-[60px] h-[60px] sm:w-[100px] sm:h-[100px] lg:w-[140px] lg:h-[140px]')}><DocsIcon size={isAlternate ? 60 : 50} className="w-full h-full" /></div>
             <div className={cn('flex flex-col items-center w-full', isAlternate ? 'gap-1' : 'gap-0.5 sm:gap-1')}>
-              <h3 className={cn('text-center font-bold text-[#333333] font-text', isAlternate ? 'text-[16px] sm:text-[18px] lg:text-[20px]' : 'text-[10px] sm:text-[16px] lg:text-[20px]', 'leading-[20px] sm:leading-[24px] lg:leading-[28px]')}>Drop file here to start a quiz</h3>
-              <p className={cn('text-center text-[#737373] font-text font-normal', isAlternate ? 'text-[12px] sm:text-[13px] lg:text-[14px]' : 'text-[8px] sm:text-[12px] lg:text-[14px]', 'leading-[16px] sm:leading-[18px] lg:leading-[20px]')}>Supports PDF, DOC, DOCX, PPT, PPTX, TXT, CSV, XLS, XLSX up to 50MB</p>
+              <h3 className={cn('text-center font-bold text-[#333333] font-text', isAlternate ? 'text-[16px] sm:text-[18px] lg:text-[20px]' : 'text-[14px] sm:text-[16px] lg:text-[20px]', 'leading-[20px] sm:leading-[24px] lg:leading-[28px]')}>Drop file here to start a quiz</h3>
+              <p className={cn('text-center text-[#737373] font-text font-normal', isAlternate ? 'text-[12px] sm:text-[13px] lg:text-[14px]' : 'text-[12px] sm:text-[12px] lg:text-[14px]', 'leading-[16px] sm:leading-[18px] lg:leading-[20px]')}>Supports PDF, DOC, DOCX, PPT, PPTX, TXT, CSV, XLS, XLSX up to 50MB</p>
             </div>
             {error && <p className="text-[#FE1212] text-sm mt-2 text-center">{error}</p>}
             <div className={cn('flex flex-col items-start', isAlternate ? 'pt-2 sm:pt-3 w-[120px]' : 'pt-1 sm:pt-2 lg:pt-3 w-[70px] sm:w-[120px] lg:w-[137px]')}>
