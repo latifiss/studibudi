@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx'
+import { extractText as extractPdfText, getDocumentProxy } from 'unpdf'
 
 export type ParsedFile = {
   text: string
@@ -40,61 +41,22 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 }
 
 /**
- * PDF extraction using PDF.js directly in the Node.js runtime.
+ * Server-side PDF extraction.
  *
- * Do NOT use pdf-parse here. pdf-parse brings PDF.js into the module graph
- * and can evaluate browser canvas code before Node has the DOMMatrix global.
- * That is the source of the recurring "DOMMatrix is not defined" failure.
- *
- * @napi-rs/canvas supplies the Node canvas globals required by PDF.js.
- * The uploaded bytes are passed directly to PDF.js; no filesystem path is
- * ever used, so files such as ./test/data/05-versions-space.pdf are never read.
+ * unpdf uses PDF.js without requiring a browser worker, native canvas, or
+ * a filesystem path. The uploaded bytes are passed directly to PDF.js.
  */
 async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
   try {
-    const canvas = await import('@napi-rs/canvas')
+    const pdf = await getDocumentProxy(bytes)
+    const result = await extractPdfText(pdf, { mergePages: false })
 
-    const globalScope = globalThis as typeof globalThis & {
-      DOMMatrix?: typeof canvas.DOMMatrix
-      ImageData?: typeof canvas.ImageData
-      Path2D?: typeof canvas.Path2D
-    }
-
-    if (!globalScope.DOMMatrix) globalScope.DOMMatrix = canvas.DOMMatrix
-    if (!globalScope.ImageData) globalScope.ImageData = canvas.ImageData
-    if (!globalScope.Path2D) globalScope.Path2D = canvas.Path2D
-
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
-
-    const loadingTask = pdfjs.getDocument({
-      data: bytes,
-      disableWorker: true,
-      useSystemFonts: true,
-      isEvalSupported: false,
-    })
-
-    const pdf = await loadingTask.promise
-    const pages: string[] = []
-
-    try {
-      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-        const page = await pdf.getPage(pageNumber)
-        try {
-          const content = await page.getTextContent()
-          const pageText = content.items
-            .map((item) => ('str' in item ? item.str : ''))
-            .filter(Boolean)
-            .join(' ')
-            .trim()
-
-          if (pageText) pages.push(`Page ${pageNumber}\n${pageText}`)
-        } finally {
-          page.cleanup()
-        }
-      }
-    } finally {
-      await pdf.destroy()
-    }
+    const pages = result.text
+      .map((pageText, index) => {
+        const normalized = normalizeText(pageText)
+        return normalized ? `Page ${index + 1}\n${normalized}` : ''
+      })
+      .filter(Boolean)
 
     const text = normalizeText(pages.join('\n\n'))
 
