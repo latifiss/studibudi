@@ -1,3 +1,4 @@
+```typescript
 import * as XLSX from 'xlsx'
 
 export type ParsedFile = {
@@ -8,7 +9,9 @@ export type ParsedFile = {
 /**
  * Extract text from a browser File.
  */
-export async function extractTextFromFile(file: File): Promise<string> {
+export async function extractTextFromFile(
+  file: File
+): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer())
 
   return extractTextFromBytes(
@@ -21,8 +24,9 @@ export async function extractTextFromFile(file: File): Promise<string> {
 /**
  * Extract text from raw file bytes.
  *
- * This function is intentionally server-safe and does not depend
- * on a filesystem path.
+ * This function is server-safe and works directly from bytes.
+ * It never assumes that the uploaded file exists on the
+ * local filesystem.
  */
 export async function extractTextFromBytes(
   bytes: Uint8Array,
@@ -77,13 +81,16 @@ export async function extractTextFromBytes(
 /**
  * TXT / CSV
  */
-function extractTextFromPlainText(bytes: Uint8Array): string {
+function extractTextFromPlainText(
+  bytes: Uint8Array
+): string {
   const text = new TextDecoder('utf-8').decode(bytes)
-
   const normalized = normalizeText(text)
 
   if (!normalized) {
-    throw new Error('No readable text was found in the file.')
+    throw new Error(
+      'No readable text was found in the file.'
+    )
   }
 
   return normalized
@@ -92,65 +99,38 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 /**
  * PDF
  *
- * Uses pdfjs-dist directly instead of pdf-parse.
+ * Uses pdf-parse's Node entry point.
  *
- * Important:
- * We pass the uploaded bytes directly to PDF.js.
+ * This is important on Vercel because the browser/default
+ * PDF.js entry can attempt to load pdf.worker.mjs and cause:
+ *
+ * "Setting up fake worker failed"
+ *
+ * The uploaded bytes are passed directly to the parser.
  * Nothing is read from the local filesystem.
  */
 async function extractTextFromPDF(
   bytes: Uint8Array
 ): Promise<string> {
+  let parser: {
+    getText: () => Promise<{ text?: string }>
+    destroy: () => Promise<void>
+  } | null = null
+
   try {
-    const pdfjs = await import(
-      'pdfjs-dist/legacy/build/pdf.mjs'
+    const { PDFParse } = await import(
+      'pdf-parse/node'
     )
 
-    const loadingTask = pdfjs.getDocument({
-      data: bytes,
-      disableFontFace: true,
-      useSystemFonts: false,
-      isEvalSupported: false,
+    parser = new PDFParse({
+      data: Buffer.from(bytes),
     })
 
-    const pdf = await loadingTask.promise
+    const result = await parser.getText()
 
-    const pages: string[] = []
-
-    for (
-      let pageNumber = 1;
-      pageNumber <= pdf.numPages;
-      pageNumber++
-    ) {
-      const page = await pdf.getPage(pageNumber)
-
-      const content =
-        await page.getTextContent()
-
-      const pageText = content.items
-        .map((item) => {
-          if (
-            typeof item === 'object' &&
-            item !== null &&
-            'str' in item
-          ) {
-            return String(item.str)
-          }
-
-          return ''
-        })
-        .join(' ')
-
-      if (pageText.trim()) {
-        pages.push(
-          `Page ${pageNumber}\n${pageText.trim()}`
-        )
-      }
-
-      page.cleanup()
-    }
-
-    const text = pages.join('\n\n').trim()
+    const text = normalizeText(
+      result?.text || ''
+    )
 
     if (!text) {
       throw new Error(
@@ -165,13 +145,26 @@ async function extractTextFromPDF(
       error
     )
 
+    if (error instanceof Error) {
+      throw new Error(
+        `Failed to parse PDF: ${error.message}`
+      )
+    }
+
     throw new Error(
-      `Failed to parse PDF: ${
-        error instanceof Error
-          ? error.message
-          : 'Unknown PDF parsing error'
-      }`
+      'Failed to parse PDF. Please ensure the file is a valid, text-based PDF.'
     )
+  } finally {
+    if (parser) {
+      try {
+        await parser.destroy()
+      } catch (destroyError) {
+        console.warn(
+          'Failed to destroy PDF parser:',
+          destroyError
+        )
+      }
+    }
   }
 }
 
@@ -184,11 +177,9 @@ async function extractTextFromDOCX(
   try {
     const mammoth = await import('mammoth')
 
-    const arrayBuffer = toArrayBuffer(bytes)
-
     const result =
       await mammoth.extractRawText({
-        arrayBuffer,
+        arrayBuffer: toArrayBuffer(bytes),
       })
 
     const text = normalizeText(
@@ -203,7 +194,19 @@ async function extractTextFromDOCX(
 
     return text
   } catch (error) {
-    console.error('DOCX parsing error:', error)
+    console.error(
+      'DOCX parsing error:',
+      error
+    )
+
+    if (
+      error instanceof Error &&
+      error.message.includes(
+        'No readable text'
+      )
+    ) {
+      throw error
+    }
 
     if (error instanceof Error) {
       throw new Error(
@@ -212,7 +215,7 @@ async function extractTextFromDOCX(
     }
 
     throw new Error(
-      'Failed to parse DOCX file. Please try converting it to PDF or TXT.'
+      'Failed to parse DOCX file. Please ensure the document is not corrupted.'
     )
   }
 }
@@ -235,22 +238,27 @@ function extractTextFromSpreadsheet(
 
     const sections: string[] = []
 
-    for (const sheetName of workbook.SheetNames) {
-      const sheet = workbook.Sheets[sheetName]
+    for (
+      const sheetName of workbook.SheetNames
+    ) {
+      const sheet =
+        workbook.Sheets[sheetName]
 
       if (!sheet) {
         continue
       }
 
-      const csv = XLSX.utils.sheet_to_csv(
-        sheet,
-        {
-          blankrows: false,
-          FS: ' | ',
-        }
-      )
+      const csv =
+        XLSX.utils.sheet_to_csv(
+          sheet,
+          {
+            blankrows: false,
+            FS: ' | ',
+          }
+        )
 
-      const normalized = normalizeText(csv)
+      const normalized =
+        normalizeText(csv)
 
       if (normalized) {
         sections.push(
@@ -291,8 +299,8 @@ function extractTextFromSpreadsheet(
 /**
  * PPTX
  *
- * PPTX is a ZIP archive containing XML.
- * We extract the text from each slide in order.
+ * PPTX is a ZIP archive containing XML slide files.
+ * We extract text from each slide in presentation order.
  */
 async function extractTextFromPPTX(
   bytes: Uint8Array
@@ -300,28 +308,31 @@ async function extractTextFromPPTX(
   try {
     const zip = new SimpleZip(bytes)
 
-    const slideNames = zip
-      .list()
-      .filter((name) =>
-        /^ppt\/slides\/slide\d+\.xml$/i.test(name)
-      )
-      .sort((a, b) => {
-        const aNumber =
-          Number(
-            a.match(
-              /slide(\d+)\.xml/i
-            )?.[1] || 0
+    const slideNames =
+      zip
+        .list()
+        .filter((name) =>
+          /^ppt\/slides\/slide\d+\.xml$/i.test(
+            name
           )
+        )
+        .sort((a, b) => {
+          const aNumber =
+            Number(
+              a.match(
+                /slide(\d+)\.xml/i
+              )?.[1] || 0
+            )
 
-        const bNumber =
-          Number(
-            b.match(
-              /slide(\d+)\.xml/i
-            )?.[1] || 0
-          )
+          const bNumber =
+            Number(
+              b.match(
+                /slide(\d+)\.xml/i
+              )?.[1] || 0
+            )
 
-        return aNumber - bNumber
-      })
+          return aNumber - bNumber
+        })
 
     if (slideNames.length === 0) {
       throw new Error(
@@ -336,10 +347,13 @@ async function extractTextFromPPTX(
       index < slideNames.length;
       index++
     ) {
-      const slideName = slideNames[index]
+      const slideName =
+        slideNames[index]
 
       const xml =
-        await zip.readText(slideName)
+        await zip.readText(
+          slideName
+        )
 
       const text = [
         ...xml.matchAll(
@@ -361,9 +375,10 @@ async function extractTextFromPPTX(
       }
     }
 
-    const result = normalizeText(
-      sections.join('\n\n')
-    )
+    const result =
+      normalizeText(
+        sections.join('\n\n')
+      )
 
     if (!result) {
       throw new Error(
@@ -408,7 +423,7 @@ function normalizeText(
 }
 
 /**
- * Decode the most common XML entities.
+ * Decode common XML entities.
  */
 function decodeXml(
   value: string
@@ -420,16 +435,23 @@ function decodeXml(
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
     .replace(/&#39;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code) =>
-      String.fromCharCode(
-        Number(code)
-      )
+    .replace(
+      /&#x27;/gi,
+      "'"
     )
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) =>
-      String.fromCharCode(
-        parseInt(code, 16)
-      )
+    .replace(
+      /&#(\d+);/g,
+      (_, code) =>
+        String.fromCharCode(
+          Number(code)
+        )
+    )
+    .replace(
+      /&#x([0-9a-f]+);/gi,
+      (_, code) =>
+        String.fromCharCode(
+          parseInt(code, 16)
+        )
     )
 }
 
@@ -441,7 +463,8 @@ function toArrayBuffer(
 ): ArrayBuffer {
   return bytes.buffer.slice(
     bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength
+    bytes.byteOffset +
+      bytes.byteLength
   ) as ArrayBuffer
 }
 
@@ -487,15 +510,17 @@ class SimpleZip {
       )
     }
 
-    const view = new DataView(
-      this.bytes.buffer,
-      this.bytes.byteOffset,
-      this.bytes.byteLength
-    )
+    const view =
+      new DataView(
+        this.bytes.buffer,
+        this.bytes.byteOffset,
+        this.bytes.byteLength
+      )
 
     if (
+      entry.offset < 0 ||
       entry.offset + 30 >
-      this.bytes.length ||
+        this.bytes.length ||
       view.getUint32(
         entry.offset,
         true
@@ -530,7 +555,8 @@ class SimpleZip {
 
     if (
       dataStart < 0 ||
-      dataEnd > this.bytes.length
+      dataEnd >
+        this.bytes.length
     ) {
       throw new Error(
         'Invalid ZIP entry bounds.'
@@ -547,7 +573,9 @@ class SimpleZip {
 
     if (entry.method === 0) {
       output = compressed
-    } else if (entry.method === 8) {
+    } else if (
+      entry.method === 8
+    ) {
       const stream =
         new Blob([
           compressed,
@@ -587,11 +615,12 @@ class SimpleZip {
   }
 
   private index(): void {
-    const view = new DataView(
-      this.bytes.buffer,
-      this.bytes.byteOffset,
-      this.bytes.byteLength
-    )
+    const view =
+      new DataView(
+        this.bytes.buffer,
+        this.bytes.byteOffset,
+        this.bytes.byteLength
+      )
 
     /*
      * Find End of Central Directory.
@@ -599,12 +628,13 @@ class SimpleZip {
      * ZIP comments can be up to 65535 bytes,
      * so search backwards through that range.
      */
-    const minimum = Math.max(
-      0,
-      this.bytes.length -
-        0xffff -
-        22
-    )
+    const minimum =
+      Math.max(
+        0,
+        this.bytes.length -
+          0xffff -
+          22
+      )
 
     let end = -1
 
@@ -653,12 +683,23 @@ class SimpleZip {
       centralDirectoryOffset +
       centralDirectorySize
 
+    if (
+      centralDirectoryOffset < 0 ||
+      centralDirectorySize < 0 ||
+      endOffset >
+        this.bytes.length
+    ) {
+      throw new Error(
+        'Invalid ZIP central directory bounds.'
+      )
+    }
+
     while (
       offset < endOffset
     ) {
       if (
         offset + 46 >
-        this.bytes.length ||
+          this.bytes.length ||
         view.getUint32(
           offset,
           true
@@ -715,7 +756,8 @@ class SimpleZip {
         offset + 46
 
       const nameEnd =
-        nameStart + nameLength
+        nameStart +
+        nameLength
 
       if (
         nameEnd >
@@ -755,3 +797,4 @@ class SimpleZip {
     }
   }
 }
+```
