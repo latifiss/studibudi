@@ -21,16 +21,6 @@ export async function GET(req: Request) {
   }
 }
 
-const createHistoryTitle = (sourceName: string, createdAt = new Date()) => {
-  const cleanName = sourceName.trim().replace(/\.[^/.]+$/, '') || 'Study Material'
-  const date = createdAt.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
-  return `${cleanName} Quiz · ${date}`
-}
-
 export async function POST(req: Request) {
   try {
     const session = await auth.api.getSession({ headers: req.headers })
@@ -50,11 +40,10 @@ export async function POST(req: Request) {
     const sourceName = typeof body?.sourceName === 'string' && body.sourceName.trim()
       ? body.sourceName.trim()
       : 'Study Material'
-    const createdAt = new Date()
     const suppliedTitle = typeof body?.title === 'string' ? body.title.trim() : ''
-    const title = suppliedTitle && !/^quiz\s+\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$/i.test(suppliedTitle)
-      ? suppliedTitle
-      : createHistoryTitle(sourceName, createdAt)
+    const title = suppliedTitle && suppliedTitle !== sourceName
+      ? suppliedTitle.slice(0, 70)
+      : sourceName.replace(/\.[^/.]+$/, '').slice(0, 70) || 'Study Session'
 
     const quiz = await prisma.quizHistory.create({
       data: {
