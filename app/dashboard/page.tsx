@@ -30,7 +30,7 @@ const Dashboard = () => {
           <div className="mt-6 sm:mt-8 lg:mt-10 w-full max-w-150 shrink-0">
             <Upload
               variant="alternate"
-              className="h-[244px] sm:h-[349px] lg:h-[349px]"
+              className="h-[244px] sm:h-[261.75px] lg:h-[261.75px]"
               onFileUpload={(file) => {
                 console.log('File selected:', file.name)
               }}
