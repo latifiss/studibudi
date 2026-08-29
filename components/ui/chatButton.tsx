@@ -8,12 +8,7 @@ interface ChatButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> 
   disabled?: boolean
 }
 
-const ChatButton = ({
-  onClick,
-  className,
-  disabled = false,
-  ...props
-}: ChatButtonProps) => {
+const ChatButton = ({ onClick, className, disabled = false, ...props }: ChatButtonProps) => {
   return (
     <button
       onClick={onClick}
@@ -21,7 +16,7 @@ const ChatButton = ({
       className={cn(
         'inline-flex items-center justify-center gap-2',
         'font-text text-[13px] font-bold leading-4.5 tracking-normal',
-        'rounded-lg px-5 h-11 w-full max-w-70',
+        'rounded-lg px-5 h-11 w-full',
         'bg-white text-black border border-[#D9D9D9]',
         'hover:bg-gray-50 active:bg-gray-100',
         'shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]',
