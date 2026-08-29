@@ -23,22 +23,20 @@ const SidebarMobile = ({ isOpen, onClose }: SidebarMobileProps) => {
 
       <div
         className={cn(
-          'fixed top-0 left-0 h-full w-full z-50 lg:hidden',
+          'fixed inset-0 w-full h-dvh z-50 lg:hidden overflow-hidden',
           'transform transition-transform duration-300 ease-in-out',
           isOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 p-1 hover:opacity-70 transition-opacity"
+          className="absolute top-4 right-4 z-[70] p-1 hover:opacity-70 transition-opacity"
           aria-label="Close sidebar"
         >
           <CloseIcon className="w-6 h-6 text-foreground" />
         </button>
 
-        <div className="w-full h-full">
-          <Sidebar className="w-full" />
-        </div>
+        <Sidebar className="w-full" />
       </div>
     </>
   )
