@@ -52,40 +52,51 @@ const ProfileModal = ({
 
     const updatePosition = () => {
       const anchor = anchorRef?.current
-      if (!anchor) return
-      const rect = anchor.getBoundingClientRect()
-      const modal = modalRef.current
-      const modalWidth = modal?.getBoundingClientRect().width ?? 280
-      const modalHeight = modal?.getBoundingClientRect().height ?? 210
+      const modalWidth = modalRef.current?.getBoundingClientRect().width ?? 280
+      const modalHeight = modalRef.current?.getBoundingClientRect().height ?? 210
       const gap = 8
 
       if (placement === 'sidebar') {
-        // Sidebar profile is at the bottom of the sidebar. Keep the modal
-        // aligned to the left edge of the profile area and above it.
+        if (!anchor) return
+        const rect = anchor.getBoundingClientRect()
         setPosition({
           top: Math.max(8, rect.top - modalHeight - gap),
           left: Math.max(8, rect.left),
         })
-      } else {
-        // Header profile: align the modal's right edge with the profile.
-        setPosition({
-          top: rect.bottom + gap,
-          left: Math.max(8, rect.right - modalWidth),
-        })
+        return
       }
+
+      // Header placement is deliberately anchored to the viewport's top-right
+      // while still staying directly below the header. Once the ref is ready,
+      // use the actual profile button so the modal follows it precisely.
+      if (!anchor) {
+        setPosition({
+          top: 72,
+          left: Math.max(8, window.innerWidth - modalWidth - 16),
+        })
+        return
+      }
+
+      const rect = anchor.getBoundingClientRect()
+      setPosition({
+        top: rect.bottom + gap,
+        left: Math.max(8, window.innerWidth - modalWidth - 16),
+      })
     }
 
     updatePosition()
     const frame = window.requestAnimationFrame(updatePosition)
+    const delayed = window.setTimeout(updatePosition, 50)
     window.addEventListener('resize', updatePosition)
     window.addEventListener('scroll', updatePosition, true)
 
     return () => {
       window.cancelAnimationFrame(frame)
+      window.clearTimeout(delayed)
       window.removeEventListener('resize', updatePosition)
       window.removeEventListener('scroll', updatePosition, true)
     }
-  }, [isOpen, anchorRef, placement])
+  }, [isOpen, anchorRef, placement, mounted])
 
   useEffect(() => {
     if (!isOpen) return
