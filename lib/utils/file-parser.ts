@@ -15,31 +15,21 @@ export async function extractTextFromBytes(
   fileName: string,
   mimeType = ''
 ): Promise<string> {
-  if (!bytes || bytes.length === 0) {
-    throw new Error('The file is empty.')
-  }
+  if (!bytes || bytes.length === 0) throw new Error('The file is empty.')
 
   const extension = fileName.split('.').pop()?.toLowerCase() || ''
 
   switch (extension) {
     case 'txt':
-    case 'csv':
-      return extractTextFromPlainText(bytes)
-    case 'pdf':
-      return extractTextFromPDF(bytes)
-    case 'docx':
-      return extractTextFromDOCX(bytes)
+    case 'csv': return extractTextFromPlainText(bytes)
+    case 'pdf': return extractTextFromPDF(bytes)
+    case 'docx': return extractTextFromDOCX(bytes)
     case 'xlsx':
-    case 'xls':
-      return extractTextFromSpreadsheet(bytes)
-    case 'pptx':
-      return extractTextFromPPTX(bytes)
-    case 'doc':
-      throw new Error('Legacy .doc files are not supported. Please save the document as DOCX or PDF and upload it again.')
-    case 'ppt':
-      throw new Error('Legacy .ppt files are not supported. Please save the presentation as PPTX or PDF and upload it again.')
-    default:
-      throw new Error(`Unsupported file type: ${mimeType || extension || 'unknown'}`)
+    case 'xls': return extractTextFromSpreadsheet(bytes)
+    case 'pptx': return extractTextFromPPTX(bytes)
+    case 'doc': throw new Error('Legacy .doc files are not supported. Please save the document as DOCX or PDF and upload it again.')
+    case 'ppt': throw new Error('Legacy .ppt files are not supported. Please save the presentation as PPTX or PDF and upload it again.')
+    default: throw new Error(`Unsupported file type: ${mimeType || extension || 'unknown'}`)
   }
 }
 
@@ -50,43 +40,72 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 }
 
 /**
- * Server-only PDF extraction.
+ * PDF extraction using PDF.js directly in the Node.js runtime.
  *
- * IMPORTANT: pdf-parse v2 loads PDF.js during module evaluation. On Vercel,
- * PDF.js needs the canvas globals supplied by @napi-rs/canvas. The worker
- * module must therefore be imported before pdf-parse itself.
+ * Do NOT use pdf-parse here. pdf-parse brings PDF.js into the module graph
+ * and can evaluate browser canvas code before Node has the DOMMatrix global.
+ * That is the source of the recurring "DOMMatrix is not defined" failure.
+ *
+ * @napi-rs/canvas supplies the Node canvas globals required by PDF.js.
+ * The uploaded bytes are passed directly to PDF.js; no filesystem path is
+ * ever used, so files such as ./test/data/05-versions-space.pdf are never read.
  */
 async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
   try {
-    const { CanvasFactory } = await import('pdf-parse/worker')
-    const { PDFParse } = await import('pdf-parse')
+    const canvas = await import('@napi-rs/canvas')
 
-    const parser = new PDFParse({
-      data: Buffer.from(bytes),
-      CanvasFactory,
+    const globalScope = globalThis as typeof globalThis & {
+      DOMMatrix?: typeof canvas.DOMMatrix
+      ImageData?: typeof canvas.ImageData
+      Path2D?: typeof canvas.Path2D
+    }
+
+    if (!globalScope.DOMMatrix) globalScope.DOMMatrix = canvas.DOMMatrix
+    if (!globalScope.ImageData) globalScope.ImageData = canvas.ImageData
+    if (!globalScope.Path2D) globalScope.Path2D = canvas.Path2D
+
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
+    const loadingTask = pdfjs.getDocument({
+      data: bytes,
+      disableWorker: true,
+      useSystemFonts: true,
+      isEvalSupported: false,
     })
 
+    const pdf = await loadingTask.promise
+    const pages: string[] = []
+
     try {
-      const result = await parser.getText()
-      const text = normalizeText(result?.text || '')
+      for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        const page = await pdf.getPage(pageNumber)
+        try {
+          const content = await page.getTextContent()
+          const pageText = content.items
+            .map((item) => ('str' in item ? item.str : ''))
+            .filter(Boolean)
+            .join(' ')
+            .trim()
 
-      if (!text) {
-        throw new Error(
-          'No readable text was found in this PDF. The PDF may be scanned or contain only images.'
-        )
+          if (pageText) pages.push(`Page ${pageNumber}\n${pageText}`)
+        } finally {
+          page.cleanup()
+        }
       }
-
-      return text
     } finally {
-      await parser.destroy()
+      await pdf.destroy()
     }
+
+    const text = normalizeText(pages.join('\n\n'))
+
+    if (!text) {
+      throw new Error('No readable text was found in this PDF. The PDF may be scanned or contain only images.')
+    }
+
+    return text
   } catch (error) {
     console.error('PDF parsing error:', error)
-
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse PDF: ${error.message}`)
-    }
-
+    if (error instanceof Error) throw new Error(`Failed to parse PDF: ${error.message}`)
     throw new Error('Failed to parse PDF. Please ensure the file is a valid, text-based PDF.')
   }
 }
@@ -94,9 +113,7 @@ async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
 async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
   try {
     const mammoth = await import('mammoth')
-    const result = await mammoth.extractRawText({
-      arrayBuffer: toArrayBuffer(bytes),
-    })
+    const result = await mammoth.extractRawText({ arrayBuffer: toArrayBuffer(bytes) })
     const text = normalizeText(result.value || '')
     if (!text) throw new Error('No readable text was found in the DOCX file.')
     return text
@@ -109,22 +126,14 @@ async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
 
 function extractTextFromSpreadsheet(bytes: Uint8Array): string {
   try {
-    const workbook = XLSX.read(Buffer.from(bytes), {
-      type: 'buffer',
-      cellText: true,
-      cellDates: true,
-    })
-
+    const workbook = XLSX.read(Buffer.from(bytes), { type: 'buffer', cellText: true, cellDates: true })
     const sections: string[] = []
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
       if (!sheet) continue
-      const normalized = normalizeText(
-        XLSX.utils.sheet_to_csv(sheet, { blankrows: false, FS: ' | ' })
-      )
+      const normalized = normalizeText(XLSX.utils.sheet_to_csv(sheet, { blankrows: false, FS: ' | ' }))
       if (normalized) sections.push(`Sheet: ${sheetName}\n${normalized}`)
     }
-
     const text = normalizeText(sections.join('\n\n'))
     if (!text) throw new Error('No readable data was found in the spreadsheet.')
     return text
@@ -138,16 +147,11 @@ function extractTextFromSpreadsheet(bytes: Uint8Array): string {
 async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
   try {
     const zip = new SimpleZip(bytes)
-    const slideNames = zip
-      .list()
+    const slideNames = zip.list()
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
-      .sort((a, b) => {
-        const aNumber = Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0)
-        const bNumber = Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0)
-        return aNumber - bNumber
-      })
+      .sort((a, b) => Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0) - Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0))
 
-    if (slideNames.length === 0) throw new Error('No slides were found in the PPTX file.')
+    if (!slideNames.length) throw new Error('No slides were found in the PPTX file.')
 
     const sections: string[] = []
     for (let index = 0; index < slideNames.length; index++) {
@@ -170,27 +174,11 @@ async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
 }
 
 function normalizeText(text: string): string {
-  return text
-    .replace(/\u0000/g, '')
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n[ \t]+/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
+  return text.replace(/\u0000/g, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/[ \t]+/g, ' ').replace(/\n[ \t]+/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 
 function decodeXml(value: string): string {
-  return value
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&#39;/g, "'")
-    .replace(/&#x27;/gi, "'")
-    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
-    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
+  return value.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#39;/g, "'").replace(/&#x27;/gi, "'").replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code))).replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCharCode(parseInt(code, 16)))
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -201,45 +189,24 @@ class SimpleZip {
   private readonly bytes: Uint8Array
   private readonly entries = new Map<string, { method: number; compressedSize: number; uncompressedSize: number; offset: number }>()
 
-  constructor(bytes: Uint8Array) {
-    this.bytes = bytes
-    this.index()
-  }
-
-  list(): string[] {
-    return [...this.entries.keys()]
-  }
+  constructor(bytes: Uint8Array) { this.bytes = bytes; this.index() }
+  list(): string[] { return [...this.entries.keys()] }
 
   async readText(name: string): Promise<string> {
     const entry = this.entries.get(name)
     if (!entry) throw new Error(`ZIP entry not found: ${name}`)
-
     const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength)
-    if (entry.offset < 0 || entry.offset + 30 > this.bytes.length || view.getUint32(entry.offset, true) !== 0x04034b50) {
-      throw new Error('Invalid ZIP local header.')
-    }
-
+    if (entry.offset < 0 || entry.offset + 30 > this.bytes.length || view.getUint32(entry.offset, true) !== 0x04034b50) throw new Error('Invalid ZIP local header.')
     const nameLength = view.getUint16(entry.offset + 26, true)
     const extraLength = view.getUint16(entry.offset + 28, true)
     const dataStart = entry.offset + 30 + nameLength + extraLength
     const dataEnd = dataStart + entry.compressedSize
     if (dataStart < 0 || dataEnd > this.bytes.length) throw new Error('Invalid ZIP entry bounds.')
-
     const compressed = this.bytes.slice(dataStart, dataEnd)
     let output: Uint8Array
-    if (entry.method === 0) {
-      output = compressed
-    } else if (entry.method === 8) {
-      const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'))
-      output = new Uint8Array(await new Response(stream).arrayBuffer())
-    } else {
-      throw new Error(`Unsupported ZIP compression method: ${entry.method}`)
-    }
-
-    if (entry.uncompressedSize > 0 && output.length !== entry.uncompressedSize) {
-      console.warn(`ZIP entry size mismatch for ${name}`)
-    }
-
+    if (entry.method === 0) output = compressed
+    else if (entry.method === 8) output = new Uint8Array(await new Response(new Blob([compressed]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer())
+    else throw new Error(`Unsupported ZIP compression method: ${entry.method}`)
     return new TextDecoder('utf-8').decode(output)
   }
 
@@ -247,29 +214,17 @@ class SimpleZip {
     const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength)
     const minimum = Math.max(0, this.bytes.length - 0xffff - 22)
     let end = -1
-
     for (let offset = this.bytes.length - 22; offset >= minimum; offset--) {
-      if (offset >= 0 && offset + 4 <= this.bytes.length && view.getUint32(offset, true) === 0x06054b50) {
-        end = offset
-        break
-      }
+      if (offset >= 0 && offset + 4 <= this.bytes.length && view.getUint32(offset, true) === 0x06054b50) { end = offset; break }
     }
-
     if (end < 0) throw new Error('Invalid ZIP archive.')
-
     const centralDirectorySize = view.getUint32(end + 12, true)
     const centralDirectoryOffset = view.getUint32(end + 16, true)
     let offset = centralDirectoryOffset
     const endOffset = centralDirectoryOffset + centralDirectorySize
-    if (centralDirectoryOffset < 0 || centralDirectorySize < 0 || endOffset > this.bytes.length) {
-      throw new Error('Invalid ZIP central directory bounds.')
-    }
-
+    if (centralDirectoryOffset < 0 || centralDirectorySize < 0 || endOffset > this.bytes.length) throw new Error('Invalid ZIP central directory bounds.')
     while (offset < endOffset) {
-      if (offset + 46 > this.bytes.length || view.getUint32(offset, true) !== 0x02014b50) {
-        throw new Error('Invalid ZIP central directory.')
-      }
-
+      if (offset + 46 > this.bytes.length || view.getUint32(offset, true) !== 0x02014b50) throw new Error('Invalid ZIP central directory.')
       const method = view.getUint16(offset + 10, true)
       const compressedSize = view.getUint32(offset + 20, true)
       const uncompressedSize = view.getUint32(offset + 24, true)
@@ -280,7 +235,6 @@ class SimpleZip {
       const nameStart = offset + 46
       const nameEnd = nameStart + nameLength
       if (nameEnd > this.bytes.length) throw new Error('Invalid ZIP filename bounds.')
-
       const name = new TextDecoder('utf-8').decode(this.bytes.slice(nameStart, nameEnd))
       this.entries.set(name, { method, compressedSize, uncompressedSize, offset: localOffset })
       offset += 46 + nameLength + extraLength + commentLength
