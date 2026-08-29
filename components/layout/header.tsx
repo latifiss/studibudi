@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Menu } from 'lucide-react'
 import BaseButton from '@/components/ui/baseButton'
 import { Wordmark } from '@/public/icons/logo'
@@ -13,33 +13,57 @@ import Image from 'next/image'
 
 const Header = () => {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { user, authenticated, logout } = useUser()
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isProfileOpen, setIsProfileOpen] = useState(false)
   const [tier, setTier] = useState<'free' | 'pro'>('free')
   const profileRef = useRef<HTMLButtonElement>(null)
 
+  const refreshEntitlements = async (retries = 1) => {
+    if (!authenticated) { setTier('free'); return }
+    try {
+      const response = await fetch('/api/billing/entitlements', { cache: 'no-store' })
+      if (!response.ok) return
+      const data = await response.json()
+      setTier(data?.isPro ? 'pro' : 'free')
+      return Boolean(data?.isPro)
+    } catch { return false }
+  }
+
+  useEffect(() => {
+    refreshEntitlements()
+  }, [authenticated])
+
+  // Paddle can return before the webhook has finished updating Prisma. Poll briefly
+  // after a successful checkout so the UI switches to PRO without requiring a
+  // manual refresh. The webhook remains the source of truth.
+  useEffect(() => {
+    if (!authenticated || searchParams.get('payment') !== 'success') return
+    let cancelled = false
+    let attempts = 0
+    const poll = async () => {
+      if (cancelled) return
+      attempts += 1
+      const isPro = await refreshEntitlements()
+      if (!isPro && attempts < 12) window.setTimeout(poll, 1500)
+    }
+    poll()
+    return () => { cancelled = true }
+  }, [authenticated, searchParams])
+
   const handleGetStarted = () => { router.push('/get-started'); setIsMenuOpen(false) }
   const toggleMenu = () => setIsMenuOpen((prev) => !prev)
-  const handleProfileClick = () => { setIsProfileOpen((prev) => !prev); setIsMenuOpen(false) }
+  const handleProfileClick = () => { setIsProfileOpen((prev) => !prev); setIsMenuOpen(false); refreshEntitlements() }
   const handleLogout = async () => { setIsProfileOpen(false); await logout?.() }
   const handleUpgrade = () => { setIsProfileOpen(false); router.push('/upgrade') }
   const handleCancel = async () => {
     const response = await fetch('/api/billing/cancel', { method: 'POST' })
     const data = await response.json().catch(() => null)
     if (!response.ok) throw new Error(data?.message || 'Unable to cancel subscription.')
-    setTier('free')
+    setTier('pro')
+    await refreshEntitlements()
   }
-
-  useEffect(() => {
-    if (!authenticated) { setTier('free'); return }
-    let cancelled = false
-    fetch('/api/billing/entitlements', { cache: 'no-store' })
-      .then(async (response) => response.ok ? response.json() : null)
-      .then((data) => { if (!cancelled) setTier(data?.isPro ? 'pro' : 'free') })
-      .catch(() => {})
-    return () => { cancelled = true }
-  }, [authenticated])
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -81,7 +105,6 @@ const Header = () => {
       </header>
 
       {isMenuOpen && !authenticated && <div className="sm:hidden fixed top-18 left-0 right-0 bg-white border-b border-border z-40 px-4 py-6 shadow-lg"><div className="flex flex-col items-center gap-4"><BaseButton variant="outline" onClick={handleGetStarted} className="text-sm w-full max-w-50">Get Started</BaseButton></div></div>}
-
       {authenticated && <div id="header-profile-modal"><ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} tier={tier} onLogout={handleLogout} onUpgrade={handleUpgrade} onCancel={tier === 'pro' ? handleCancel : undefined} userEmail={userEmail} userName={displayName} anchorRef={profileRef} /></div>}
     </>
   )
