@@ -5,20 +5,11 @@ export type ParsedFile = {
   fileType: string
 }
 
-/**
- * Extract text from a browser File.
- */
 export async function extractTextFromFile(file: File): Promise<string> {
   const bytes = new Uint8Array(await file.arrayBuffer())
   return extractTextFromBytes(bytes, file.name, file.type)
 }
 
-/**
- * Extract text from raw file bytes.
- *
- * This function is server-safe and works directly from bytes. It never
- * assumes that the uploaded file exists on the local filesystem.
- */
 export async function extractTextFromBytes(
   bytes: Uint8Array,
   fileName: string,
@@ -63,17 +54,23 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 }
 
 /**
- * PDF parsing for Vercel/Next.js server runtime.
+ * Parse PDF entirely from the uploaded bytes.
  *
- * Uses pdf-parse v2's explicit Node entry point and passes the uploaded
- * bytes in memory. This avoids the old pdf-parse v1 test-file behavior and
- * avoids browser PDF.js workers / DOMMatrix requirements.
+ * pdf-parse v2's Node entry is intentionally used here. The previous
+ * implementation could be transformed into the browser build by Turbopack,
+ * which caused DOMMatrix/fake-worker errors and, with older pdf-parse,
+ * fallback attempts to ./test/data/*.pdf.
  */
 async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
   let parser: { getText: () => Promise<{ text?: string }>; destroy: () => Promise<void> } | null = null
 
   try {
-    const { PDFParse } = await import('pdf-parse/node')
+    const pdfParse = await import('pdf-parse')
+    const PDFParse = pdfParse.PDFParse
+
+    if (typeof PDFParse !== 'function') {
+      throw new Error('PDF parser is unavailable in the server runtime.')
+    }
 
     parser = new PDFParse({
       data: Buffer.from(bytes),
@@ -91,12 +88,10 @@ async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
     return text
   } catch (error) {
     console.error('PDF parsing error:', error)
-
     if (error instanceof Error) {
       throw new Error(`Failed to parse PDF: ${error.message}`)
     }
-
-    throw new Error('Failed to parse PDF. Please ensure the file is a valid, text-based PDF.')
+    throw new Error('Failed to parse PDF.')
   } finally {
     if (parser) {
       try {
@@ -115,7 +110,6 @@ async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
       arrayBuffer: toArrayBuffer(bytes),
     })
     const text = normalizeText(result.value || '')
-
     if (!text) throw new Error('No readable text was found in the DOCX file.')
     return text
   } catch (error) {
@@ -123,7 +117,7 @@ async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
     if (error instanceof Error) {
       throw new Error(`Failed to parse DOCX file: ${error.message}`)
     }
-    throw new Error('Failed to parse DOCX file. Please try converting it to PDF or TXT.')
+    throw new Error('Failed to parse DOCX file.')
   }
 }
 
@@ -136,29 +130,21 @@ function extractTextFromSpreadsheet(bytes: Uint8Array): string {
     })
 
     const sections: string[] = []
-
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
       if (!sheet) continue
-
-      const normalized = normalizeText(
-        XLSX.utils.sheet_to_csv(sheet, {
-          blankrows: false,
-          FS: ' | ',
-        })
+      const text = normalizeText(
+        XLSX.utils.sheet_to_csv(sheet, { blankrows: false, FS: ' | ' })
       )
-
-      if (normalized) sections.push(`Sheet: ${sheetName}\n${normalized}`)
+      if (text) sections.push(`Sheet: ${sheetName}\n${text}`)
     }
 
-    const text = normalizeText(sections.join('\n\n'))
-    if (!text) throw new Error('No readable data was found in the spreadsheet.')
-    return text
+    const result = normalizeText(sections.join('\n\n'))
+    if (!result) throw new Error('No readable data was found in the spreadsheet.')
+    return result
   } catch (error) {
     console.error('Spreadsheet parsing error:', error)
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse spreadsheet: ${error.message}`)
-    }
+    if (error instanceof Error) throw new Error(`Failed to parse spreadsheet: ${error.message}`)
     throw new Error('Failed to parse spreadsheet file.')
   }
 }
@@ -169,16 +155,11 @@ async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
     const slideNames = zip
       .list()
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
-      .sort((a, b) => {
-        const aNumber = Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0)
-        const bNumber = Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0)
-        return aNumber - bNumber
-      })
+      .sort((a, b) => Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0) - Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0))
 
     if (slideNames.length === 0) throw new Error('No slides were found in the PPTX file.')
 
     const sections: string[] = []
-
     for (let index = 0; index < slideNames.length; index++) {
       const xml = await zip.readText(slideNames[index])
       const text = [...xml.matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/gi)]
@@ -193,9 +174,7 @@ async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
     return result
   } catch (error) {
     console.error('PPTX parsing error:', error)
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse PPTX file: ${error.message}`)
-    }
+    if (error instanceof Error) throw new Error(`Failed to parse PPTX file: ${error.message}`)
     throw new Error('Failed to parse PPTX file.')
   }
 }
@@ -225,20 +204,12 @@ function decodeXml(value: string): string {
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  return bytes.buffer.slice(
-    bytes.byteOffset,
-    bytes.byteOffset + bytes.byteLength
-  ) as ArrayBuffer
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 }
 
 class SimpleZip {
   private readonly bytes: Uint8Array
-  private readonly entries = new Map<string, {
-    method: number
-    compressedSize: number
-    uncompressedSize: number
-    offset: number
-  }>()
+  private readonly entries = new Map<string, { method: number; compressedSize: number; uncompressedSize: number; offset: number }>()
 
   constructor(bytes: Uint8Array) {
     this.bytes = bytes
@@ -254,7 +225,6 @@ class SimpleZip {
     if (!entry) throw new Error(`ZIP entry not found: ${name}`)
 
     const view = new DataView(this.bytes.buffer, this.bytes.byteOffset, this.bytes.byteLength)
-
     if (entry.offset < 0 || entry.offset + 30 > this.bytes.length || view.getUint32(entry.offset, true) !== 0x04034b50) {
       throw new Error('Invalid ZIP local header.')
     }
@@ -263,7 +233,6 @@ class SimpleZip {
     const extraLength = view.getUint16(entry.offset + 28, true)
     const dataStart = entry.offset + 30 + nameLength + extraLength
     const dataEnd = dataStart + entry.compressedSize
-
     if (dataStart < 0 || dataEnd > this.bytes.length) throw new Error('Invalid ZIP entry bounds.')
 
     const compressed = this.bytes.slice(dataStart, dataEnd)
@@ -276,10 +245,6 @@ class SimpleZip {
       output = new Uint8Array(await new Response(stream).arrayBuffer())
     } else {
       throw new Error(`Unsupported ZIP compression method: ${entry.method}`)
-    }
-
-    if (entry.uncompressedSize > 0 && output.length !== entry.uncompressedSize) {
-      console.warn(`ZIP entry size mismatch for ${name}`)
     }
 
     return new TextDecoder('utf-8').decode(output)
@@ -304,9 +269,7 @@ class SimpleZip {
     let offset = centralDirectoryOffset
     const endOffset = centralDirectoryOffset + centralDirectorySize
 
-    if (centralDirectoryOffset < 0 || centralDirectorySize < 0 || endOffset > this.bytes.length) {
-      throw new Error('Invalid ZIP central directory bounds.')
-    }
+    if (endOffset > this.bytes.length) throw new Error('Invalid ZIP central directory bounds.')
 
     while (offset < endOffset) {
       if (offset + 46 > this.bytes.length || view.getUint32(offset, true) !== 0x02014b50) {
@@ -322,18 +285,10 @@ class SimpleZip {
       const localOffset = view.getUint32(offset + 42, true)
       const nameStart = offset + 46
       const nameEnd = nameStart + nameLength
-
       if (nameEnd > this.bytes.length) throw new Error('Invalid ZIP filename bounds.')
 
       const name = new TextDecoder('utf-8').decode(this.bytes.slice(nameStart, nameEnd))
-
-      this.entries.set(name, {
-        method,
-        compressedSize,
-        uncompressedSize,
-        offset: localOffset,
-      })
-
+      this.entries.set(name, { method, compressedSize, uncompressedSize, offset: localOffset })
       offset += 46 + nameLength + extraLength + commentLength
     }
   }
