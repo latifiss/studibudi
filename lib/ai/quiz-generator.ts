@@ -7,7 +7,7 @@ const OPENROUTER_SITE_URL = process.env.OPENROUTER_SITE_URL || 'http://localhost
 const OPENROUTER_SITE_NAME = process.env.OPENROUTER_SITE_NAME || 'Studibudi'
 
 export interface Question { id: string; question: string; options: { id: string; label: string }[]; correctAnswer: string; explanation: string; sourceReference?: string }
-export interface GeneratedQuiz { questions: Question[] }
+export interface GeneratedQuiz { questions: Question[]; title: string }
 
 async function fetchWithRetry(url: string, options: AxiosRequestConfig, maxRetries = 3): Promise<AxiosResponse> {
   let lastError: unknown
@@ -88,11 +88,17 @@ const isValidQuestion = (question: Question): boolean => {
     ['A', 'B', 'C', 'D'].includes(question.correctAnswer) && question.options.some(option => option.id === question.correctAnswer && option.label.length > 0) && question.explanation.length > 0
 }
 
+const cleanTitle = (value: unknown): string => {
+  const title = String(value ?? '').replace(/[\n"'`]/g, '').replace(/\s+/g, ' ').trim()
+  if (!title) return 'Study Session'
+  return title.slice(0, 70)
+}
+
 const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz => {
   if (!value || typeof value !== 'object' || !Array.isArray((value as GeneratedQuiz).questions)) throw new Error('The AI returned an invalid quiz structure.')
   const questions = (value as GeneratedQuiz).questions.map(normalizeQuestion).filter(isValidQuestion)
   if (questions.length < minimumQuestions) throw new Error(`The AI returned only ${questions.length} usable questions. Please try again.`)
-  return { questions }
+  return { questions, title: cleanTitle((value as { title?: unknown }).title) }
 }
 
 const secureShuffle = <T,>(items: T[]): T[] => {
@@ -111,7 +117,7 @@ const randomizeQuestion = (question: Question, index: number): Question => {
   return { ...question, id: String(index + 1), options, correctAnswer: optionIds[correctIndex] }
 }
 
-const createFreshQuiz = (pool: Question[], numQuestions: number, excludedQuestionFingerprints = new Set<string>()): GeneratedQuiz => {
+const createFreshQuiz = (pool: Question[], numQuestions: number, excludedQuestionFingerprints = new Set<string>(), title = 'Study Session'): GeneratedQuiz => {
   const unique = new Map<string, Question>()
   for (const question of secureShuffle(pool)) {
     const fingerprint = questionFingerprint(question)
@@ -119,7 +125,7 @@ const createFreshQuiz = (pool: Question[], numQuestions: number, excludedQuestio
   }
   const selected = secureShuffle([...unique.values()]).slice(0, numQuestions)
   if (selected.length < numQuestions) throw new Error(`Not enough new questions were generated. Needed ${numQuestions}, found ${selected.length}.`)
-  return { questions: selected.map((question, index) => randomizeQuestion(question, index)) }
+  return { questions: selected.map((question, index) => randomizeQuestion(question, index)), title: cleanTitle(title) }
 }
 
 async function requestQuizPool(prompt: string, model: string, poolSize: number, generationId: string): Promise<unknown> {
@@ -129,7 +135,7 @@ async function requestQuizPool(prompt: string, model: string, poolSize: number, 
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool for every request. Use only the supplied document.' },
+        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool and a short human-friendly study title for every request. Use only the supplied document.' },
         { role: 'user', content: prompt },
       ],
       temperature: 1, top_p: 0.95, frequency_penalty: 0.35, presence_penalty: 0.25,
@@ -153,7 +159,7 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
     const excluded = previousQuestions.length > 0
       ? `\n\nQUESTIONS ALREADY USED\nDo NOT reuse or closely paraphrase these questions. Create different questions testing different aspects of the document:\n${previousQuestions.slice(0, 100).map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND USED QUESTIONS\n`
       : ''
-    return `Generate a fresh question pool for a study quiz using ONLY the uploaded document.\n\nREQUEST ID: ${generationId}-${retry ? 'retry' : 'initial'}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nGenerate exactly ${requestedPoolSize} substantially different questions. The application will randomly choose ${numQuestions} NEW questions from this pool.\n\nFRESHNESS IS REQUIRED:\n- This is a completely new quiz generation request.\n- Every generated quiz must be different from all quizzes previously generated for this user.\n- Never reuse an earlier question, even when the exact same document is uploaded again.\n- Do not merely change wording of a previously used question; test a different fact, relationship, section, comparison, implication, or application.\n- Cover different sections, concepts, facts, relationships, comparisons, details, and applications when supported.\n- Use varied wording and correct-answer positions.\n- Do not repeat or create near-duplicate questions.\n${excluded}\nGROUNDING:\n- Use ONLY information contained in the uploaded document.\n- Do not use outside knowledge.\n- Every question must be answerable directly from the document.\n- Every question must have exactly four options: A, B, C, D.\n- Exactly one option must be correct.\n- Every question must include a concise explanation.\n- sourceReference is optional and must not be invented.\n\nReturn JSON only with {"questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"...","sourceReference":"..."}]}\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
+    return `Generate a fresh study quiz pool using ONLY the uploaded document.\n\nREQUEST ID: ${generationId}-${retry ? 'retry' : 'initial'}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nGenerate exactly ${requestedPoolSize} substantially different questions. The application will randomly choose ${numQuestions} NEW questions from this pool.\n\nAlso generate ONE concise, natural title for this study material, like an AI chat title. The title should describe the main subject of the document, not the file name and not the quiz itself. Prefer 2-5 words. Examples: "Latif Layers Application", "Cell Biology Basics", "Marketing Strategy Notes", "Database Normalization". Do not include dates, file extensions, "Quiz", "Study", "Notes", or generic phrases unless they are genuinely part of the subject.\n\nFRESHNESS IS REQUIRED:\n- This is a completely new quiz generation request.\n- Every generated quiz must be different from all quizzes previously generated for this user.\n- Never reuse an earlier question, even when the exact same document is uploaded again.\n- Do not merely change wording of a previously used question; test a different fact, relationship, section, comparison, implication, or application.\n- Cover different sections, concepts, facts, relationships, comparisons, details, and applications when supported.\n- Use varied wording and correct-answer positions.\n- Do not repeat or create near-duplicate questions.\n${excluded}\nGROUNDING:\n- Use ONLY information contained in the uploaded document.\n- Do not use outside knowledge.\n- Every question must be answerable directly from the document.\n- Every question must have exactly four options: A, B, C, D.\n- Exactly one option must be correct.\n- Every question must include a concise explanation.\n- sourceReference is optional and must not be invented.\n\nReturn JSON only in this shape:\n{"title":"Latif Layers Application","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"...","sourceReference":"..."}]}\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
   }
 
   let lastValidationError: Error | null = null
@@ -161,8 +167,8 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
     try {
       const requestedPoolSize = attempt === 0 ? poolSize : Math.max(numQuestions * 4, 20)
       const value = await requestQuizPool(buildPrompt(requestedPoolSize, attempt > 0), model, requestedPoolSize, generationId)
-      const pool = validateQuiz(value, numQuestions).questions
-      return createFreshQuiz(pool, numQuestions, previousQuestionFingerprints)
+      const validated = validateQuiz(value, numQuestions)
+      return createFreshQuiz(validated.questions, numQuestions, previousQuestionFingerprints, validated.title)
     } catch (error) {
       lastValidationError = error instanceof Error ? error : new Error('Quiz generation failed.')
       if (attempt < 2) continue
