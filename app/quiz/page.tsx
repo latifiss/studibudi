@@ -195,7 +195,7 @@ const Quiz = () => {
           </div>
         </header>
 
-        <main className="mx-auto flex min-h-0 w-full max-w-[600px] flex-1 flex-col items-center justify-center overflow-hidden px-4 py-2 sm:px-6 sm:py-4 md:py-5">
+        <main className="mx-auto flex min-h-0 w-full max-w-[600px] flex-1 flex-col items-center justify-center overflow-hidden px-4 py-2 sm:px-6 sm:py-2 md:py-3">
           <h2 className="mb-3 line-clamp-3 w-full shrink-0 overflow-hidden px-2 text-center font-display text-[20px] font-bold leading-[27px] text-[#333333] sm:mb-5 sm:px-0 sm:text-[24px] sm:leading-[34px] md:mb-6 md:text-[28px] md:leading-[38px]">
             {currentQuestion.question}
           </h2>
