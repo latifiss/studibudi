@@ -25,7 +25,10 @@ const SidebarProfile = ({ loginHref = '/login', signupHref = '/signin', classNam
   const userName = user?.name || 'User'
 
   const refreshTier = async () => {
-    if (!authenticated) { setTier('free'); return }
+    if (!authenticated) {
+      setTier('free')
+      return
+    }
     try {
       const response = await fetch('/api/billing/entitlements', { cache: 'no-store' })
       if (!response.ok) return
@@ -38,23 +41,29 @@ const SidebarProfile = ({ loginHref = '/login', signupHref = '/signin', classNam
   useEffect(() => { if (isModalOpen) refreshTier() }, [isModalOpen])
 
   const handleLogout = async () => {
-    try { await logout?.() } finally { setIsModalOpen(false) }
+    await logout?.()
   }
 
   const handleUpgrade = () => {
-    setIsModalOpen(false)
     window.location.href = '/upgrade'
   }
 
-  const handleProfileClick = () => {
+  const handleProfileClick = (event: React.MouseEvent) => {
+    event.stopPropagation()
     if (!authenticated) return
     setIsModalOpen((open) => !open)
   }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) setIsModalOpen(false)
+      const target = event.target as Node
+      const anchor = profileRef.current
+      const modal = document.getElementById('profile-modal')
+
+      if (anchor?.contains(target) || modal?.contains(target)) return
+      setIsModalOpen(false)
     }
+
     if (isModalOpen) document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isModalOpen])
@@ -79,7 +88,18 @@ const SidebarProfile = ({ loginHref = '/login', signupHref = '/signin', classNam
         </div>
       )}
 
-      <ProfileModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} tier={tier} onLogout={handleLogout} onUpgrade={handleUpgrade} userEmail={userEmail} userName={userName} anchorRef={profileRef} />
+      <ProfileModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        tier={tier}
+        onLogout={handleLogout}
+        onUpgrade={handleUpgrade}
+        onCancel={tier === 'pro' ? () => { window.location.href = '/cancel' } : undefined}
+        userEmail={userEmail}
+        userName={userName}
+        userImage={user?.image || undefined}
+        anchorRef={profileRef}
+      />
     </div>
   )
 }
