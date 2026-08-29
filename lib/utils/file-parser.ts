@@ -90,24 +90,35 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 }
 
 /**
+ * PDF.js can mis-read a Node Buffer / pooled ArrayBuffer view.
+ * Always pass a standalone Uint8Array of the uploaded bytes.
+ */
+function toStandaloneBytes(bytes: Uint8Array): Uint8Array {
+  const copy = new Uint8Array(bytes.byteLength)
+  copy.set(bytes)
+  return copy
+}
+
+/**
  * PDF
  *
- * Uses pdfjs-dist directly instead of pdf-parse.
- *
- * Important:
- * We pass the uploaded bytes directly to PDF.js.
- * Nothing is read from the local filesystem.
+ * Uses pdfjs-dist on the server. Do not use pdf-parse — its entry
+ * file tries to open ./test/data/05-versions-space.pdf when bundled.
  */
 async function extractTextFromPDF(
   bytes: Uint8Array
 ): Promise<string> {
   try {
-    const pdfjs = await import(
-      'pdfjs-dist/legacy/build/pdf.mjs'
-    )
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+
+    if (pdfjs.GlobalWorkerOptions) {
+      pdfjs.GlobalWorkerOptions.workerSrc = ''
+    }
 
     const loadingTask = pdfjs.getDocument({
-      data: bytes,
+      data: toStandaloneBytes(bytes),
+      disableAutoFetch: true,
+      disableStream: true,
       disableFontFace: true,
       useSystemFonts: false,
       isEvalSupported: false,
