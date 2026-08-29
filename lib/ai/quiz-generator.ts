@@ -57,22 +57,12 @@ const buildStudyContext = (text: string, maxCharacters = 50000) => {
 
 const normalizeQuestionText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim()
 const questionFingerprint = (question: Question | string) => crypto.createHash('sha256').update(normalizeQuestionText(typeof question === 'string' ? question : question.question)).digest('hex')
-const questionTokens = (value: string) => new Set(normalizeQuestionText(value).split(' ').filter(token => token.length > 2))
 
-// Only block very obvious copies. Legitimate paraphrases and different questions
-// about the same concept are allowed, especially when the source is small.
-const questionSimilarity = (a: string, b: string) => {
-  const left = questionTokens(a)
-  const right = questionTokens(b)
-  if (!left.size || !right.size) return 0
-  let intersection = 0
-  for (const token of left) if (right.has(token)) intersection++
-  return intersection / Math.min(left.size, right.size)
-}
-
-const isExactOrObviousCopy = (question: string, previousQuestions: string[]) => {
+// History is exclusion data only. Do not use semantic similarity here: a legitimate
+// paraphrase or a new question about the same concept is allowed.
+const isExactDuplicate = (question: string, previousQuestions: string[]) => {
   const normalized = normalizeQuestionText(question)
-  return previousQuestions.some(previous => normalized === normalizeQuestionText(previous) || questionSimilarity(question, previous) >= 0.95)
+  return previousQuestions.some(previous => normalized === normalizeQuestionText(previous))
 }
 
 const normalizeOptionId = (id: unknown, index: number): string => {
@@ -112,8 +102,7 @@ const cleanTitle = (value: unknown): string => {
 
 const extractQuestions = (value: unknown): { questions: Question[]; title: string } => {
   if (!value || typeof value !== 'object' || !Array.isArray((value as any).questions)) return { questions: [], title: cleanTitle((value as any)?.title) }
-  const questions = (value as any).questions.map(normalizeQuestion).filter(isValidQuestion)
-  return { questions, title: cleanTitle((value as any).title) }
+  return { questions: (value as any).questions.map(normalizeQuestion).filter(isValidQuestion), title: cleanTitle((value as any).title) }
 }
 
 const secureShuffle = <T,>(items: T[]): T[] => {
@@ -138,8 +127,8 @@ const selectFreshQuestions = (candidates: Question[], numQuestions: number, prev
   for (const question of secureShuffle(candidates)) {
     const fingerprint = questionFingerprint(question)
     if (seen.has(fingerprint)) continue
-    if (isExactOrObviousCopy(question.question, previousQuestions)) continue
-    if (selected.some(existing => isExactOrObviousCopy(question.question, [existing.question]))) continue
+    if (isExactDuplicate(question.question, previousQuestions)) continue
+    if (selected.some(existing => questionFingerprint(existing) === fingerprint)) continue
     seen.add(fingerprint)
     selected.push(question)
     if (selected.length === numQuestions) break
@@ -154,7 +143,7 @@ async function requestQuiz(prompt: string, model: string, generationId: string, 
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Always produce the requested number of complete usable questions. Previously used questions should not be copied, but legitimate paraphrases and different questions about the same concept are allowed.' },
+        { role: 'system', content: 'You are a document-grounded quiz generator. The CURRENT DOCUMENT is the only source of facts. Previous questions are provided only as a do-not-repeat list; they are NOT source material and must never be used to introduce facts. Return valid JSON only. Always produce the requested number of complete usable questions.' },
         { role: 'user', content: prompt },
       ],
       temperature: 1.2, top_p: 1, frequency_penalty: 0.7, presence_penalty: 0.6,
@@ -173,23 +162,21 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
   const documentFingerprint = crypto.createHash('sha256').update(documentText).digest('hex').slice(0, 16)
   const previousForPrompt = previousQuestions.slice(0, 150)
 
-  const baseRules = `Use ONLY the uploaded document. Generate exactly ${numQuestions} complete questions. Each question must have exactly four options A, B, C, D, exactly one correct answer, and a concise explanation. Never omit a question. Never return placeholders. Do not copy a previous question verbatim or make a trivial wording change. However, you may revisit the same concept when the document is limited; use a different detail, angle, question type, scenario, relationship, or perspective. Reusing correct or incorrect answer choices is completely allowed when they fit. Vary question types when supported by the material.`
-  const previousBlock = previousForPrompt.length
-    ? `\n\nPREVIOUS QUESTIONS\nDo not reproduce these questions. You may test the same subject matter differently if needed.\n${previousForPrompt.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND PREVIOUS QUESTIONS\n`
-    : ''
-
-  const makePrompt = (missing: number, existing: Question[] = []) => {
-    const existingBlock = existing.length ? `\n\nALREADY ACCEPTED IN THIS REQUEST\nDo not duplicate these accepted questions:\n${existing.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}\nEND ACCEPTED\n` : ''
-    return `Generate a fresh study quiz from the uploaded document.\n\nGENERATION ID: ${generationId}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\n${baseRules}\n\nYou need to provide ${missing} NEW question${missing === 1 ? '' : 's'} in this response.${previousBlock}${existingBlock}\n\nAlso return ONE short natural AI-style title describing the document's main subject. Use 2-5 words. Do not use the filename, date, or the word Quiz.\n\nReturn JSON only in this shape:\n{"title":"Natural Subject Title","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"..."}]}\n\nIMPORTANT: Return exactly ${missing} complete questions.\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
+  const makePrompt = (count: number, existing: Question[] = []) => {
+    const previousBlock = previousForPrompt.length
+      ? `\n\nDO-NOT-REPEAT LIST (EXCLUSION ONLY)\nThese are questions used in earlier quizzes. They are NOT part of the source material. Do not copy them. You may ask a different question about the same subject if that subject is supported by the current document.\n${previousForPrompt.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND EXCLUSION LIST\n`
+      : ''
+    const existingBlock = existing.length
+      ? `\n\nALREADY ACCEPTED QUESTIONS FOR THIS QUIZ\nDo not repeat these exact questions:\n${existing.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}\nEND ACCEPTED QUESTIONS\n`
+      : ''
+    return `Generate exactly ${count} fresh quiz question${count === 1 ? '' : 's'} from the CURRENT DOCUMENT below.\n\nGENERATION ID: ${generationId}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nSOURCE RULE — CRITICAL:\n- The CURRENT DOCUMENT below is the ONLY knowledge source.\n- Every question, every option, the correct answer, and every explanation must be supported by information in the CURRENT DOCUMENT.\n- Do not use outside knowledge.\n- Do not use facts from previous questions. Previous questions are exclusion data only.\n- If a fact is not in the CURRENT DOCUMENT, do not include it.\n\nUNIQUENESS:\n- Never copy a previous question verbatim.\n- Do not make a trivial word swap of a previous question.\n- Legitimate paraphrasing and different questions about the same concept are allowed.\n- Reusing answer choices is allowed when they are supported by the CURRENT DOCUMENT.\n- Vary question type and perspective when the document supports it.\n\nQUESTION FORMAT:\n- Exactly four options: A, B, C, D.\n- Exactly one correct answer.\n- Concise explanation grounded in the CURRENT DOCUMENT.\n- No placeholders.\n\n${previousBlock}${existingBlock}\nReturn JSON only:\n{"title":"Natural Subject Title","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"..."}]}\n\nTitle: 2-5 words describing the CURRENT DOCUMENT's main subject. Do not use the filename, date, or the word Quiz.\n\n=== CURRENT DOCUMENT — ONLY SOURCE ===\n${documentText}\n=== END CURRENT DOCUMENT ===`
   }
 
   let accepted: Question[] = []
   let title = 'Study Session'
   let lastError: Error | null = null
 
-  // First request asks for the complete quiz. If the model returns fewer usable
-  // questions, later requests fill only the missing slots instead of failing.
-  for (let attempt = 0; attempt < 5 && accepted.length < numQuestions; attempt++) {
+  for (let attempt = 0; attempt < 6 && accepted.length < numQuestions; attempt++) {
     try {
       const missing = numQuestions - accepted.length
       const requested = attempt === 0 ? numQuestions : Math.max(missing + 2, missing)
@@ -198,16 +185,12 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
       if (extracted.title !== 'Study Session') title = extracted.title
       const fresh = selectFreshQuestions(extracted.questions, missing, [...previousForPrompt, ...accepted.map(q => q.question)])
       accepted = [...accepted, ...fresh]
-      if (accepted.length >= numQuestions) break
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Quiz generation failed.')
     }
   }
 
-  if (accepted.length < numQuestions) {
-    throw lastError || new Error(`The AI could not produce ${numQuestions} complete questions. Please try again.`)
-  }
-
+  if (accepted.length < numQuestions) throw lastError || new Error(`The AI could not produce ${numQuestions} complete questions. Please try again.`)
   return { questions: accepted.slice(0, numQuestions).map((question, index) => randomizeQuestion(question, index)), title: cleanTitle(title) }
 }
 
