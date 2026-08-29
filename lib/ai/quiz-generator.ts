@@ -1,4 +1,5 @@
 import axios, { AxiosRequestConfig, AxiosResponse } from 'axios'
+import crypto from 'node:crypto'
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY?.trim()
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini'
@@ -89,8 +90,20 @@ const validateQuiz = (value: unknown, expectedQuestions: number): GeneratedQuiz 
 
 export async function generateQuizWithOpenRouter(text: string, numQuestions = 5, model = OPENROUTER_MODEL): Promise<GeneratedQuiz> {
   if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+
   const documentText = buildStudyContext(text)
-  const prompt = `Create a study quiz using ONLY the uploaded document below.
+  const generationId = crypto.randomUUID()
+
+  const prompt = `Create a NEW study quiz using ONLY the uploaded document below.
+
+This is a fresh quiz-generation request. Generation ID: ${generationId}
+
+IMPORTANT VARIATION RULES:
+- Never reuse, recall, or reproduce a previous quiz.
+- The same document may be uploaded multiple times and must produce a different quiz each time.
+- Choose a different combination of concepts, facts, details, and question wording for every generation.
+- Vary which parts of the document are tested and vary the correct-option positions.
+- Do not let the generation ID, previous quizzes, or external knowledge influence the factual content of questions; it exists only to make this request unique.
 
 Rules:
 - Every question must be answerable from the document.
@@ -133,14 +146,16 @@ END DOCUMENT`
       'HTTP-Referer': OPENROUTER_SITE_URL,
       'X-Title': OPENROUTER_SITE_NAME,
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
     },
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Never invent information outside the supplied document.' },
+        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Never invent information outside the supplied document. Every generation request must create a fresh quiz rather than reusing a previous quiz.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.1,
+      temperature: 0.8,
       max_tokens: 5000,
       response_format: { type: 'json_object' },
     },
