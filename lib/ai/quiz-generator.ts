@@ -55,8 +55,30 @@ const buildStudyContext = (text: string, maxCharacters = 50000) => {
   return selected.join('\n\n')
 }
 
-const normalizeQuestionText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const normalizeQuestionText = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\b(what|which|who|where|when|why|how|does|did|is|are|was|were|can|could|the|a|an|of|to|in|on|for|from|and|or|with|by|as|about|according|document)\b/g, ' ').replace(/\s+/g, ' ').trim()
 const questionFingerprint = (question: Question | string) => crypto.createHash('sha256').update(normalizeQuestionText(typeof question === 'string' ? question : question.question)).digest('hex')
+
+const questionTokens = (value: string) => new Set(normalizeQuestionText(value).split(' ').filter(token => token.length > 2))
+
+// Detect questions that are effectively the same even when the model paraphrases them.
+const questionSimilarity = (a: string, b: string) => {
+  const left = questionTokens(a)
+  const right = questionTokens(b)
+  if (!left.size || !right.size) return 0
+  let intersection = 0
+  for (const token of left) if (right.has(token)) intersection++
+  return intersection / (left.size + right.size - intersection)
+}
+
+const isNearDuplicate = (question: string, previousQuestions: string[]) => {
+  const normalized = normalizeQuestionText(question)
+  if (!normalized) return true
+  return previousQuestions.some(previous => {
+    if (questionFingerprint(question) === questionFingerprint(previous)) return true
+    const similarity = questionSimilarity(question, previous)
+    return similarity >= 0.72
+  })
+}
 
 const normalizeOptionId = (id: unknown, index: number): string => {
   const value = String(id ?? '').trim().toUpperCase()
@@ -90,8 +112,7 @@ const isValidQuestion = (question: Question): boolean => {
 
 const cleanTitle = (value: unknown): string => {
   const title = String(value ?? '').replace(/[\n"'`]/g, '').replace(/\s+/g, ' ').trim()
-  if (!title) return 'Study Session'
-  return title.slice(0, 70)
+  return (title || 'Study Session').slice(0, 70)
 }
 
 const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz => {
@@ -117,14 +138,22 @@ const randomizeQuestion = (question: Question, index: number): Question => {
   return { ...question, id: String(index + 1), options, correctAnswer: optionIds[correctIndex] }
 }
 
-const createFreshQuiz = (pool: Question[], numQuestions: number, excludedQuestionFingerprints = new Set<string>(), title = 'Study Session'): GeneratedQuiz => {
-  const unique = new Map<string, Question>()
+const createFreshQuiz = (pool: Question[], numQuestions: number, previousQuestions: string[], title: string): GeneratedQuiz => {
+  const unique: Question[] = []
+  const seenFingerprints = new Set<string>()
+
   for (const question of secureShuffle(pool)) {
     const fingerprint = questionFingerprint(question)
-    if (!excludedQuestionFingerprints.has(fingerprint) && !unique.has(fingerprint)) unique.set(fingerprint, question)
+    if (seenFingerprints.has(fingerprint)) continue
+    if (isNearDuplicate(question.question, previousQuestions)) continue
+    if (unique.some(existing => questionSimilarity(existing.question, question.question) >= 0.72)) continue
+    seenFingerprints.add(fingerprint)
+    unique.push(question)
   }
-  const selected = secureShuffle([...unique.values()]).slice(0, numQuestions)
-  if (selected.length < numQuestions) throw new Error(`Not enough new questions were generated. Needed ${numQuestions}, found ${selected.length}.`)
+
+  const selected = secureShuffle(unique).slice(0, numQuestions)
+  if (selected.length < numQuestions) throw new Error(`Not enough genuinely new questions were generated. Needed ${numQuestions}, found ${selected.length}.`)
+
   return { questions: selected.map((question, index) => randomizeQuestion(question, index)), title: cleanTitle(title) }
 }
 
@@ -135,11 +164,15 @@ async function requestQuizPool(prompt: string, model: string, poolSize: number, 
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool and a short human-friendly study title for every request. Use only the supplied document.' },
+        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a genuinely different question pool for every request. Never repeat or paraphrase previously used questions. Use only the supplied document.' },
         { role: 'user', content: prompt },
       ],
-      temperature: 1, top_p: 0.95, frequency_penalty: 0.35, presence_penalty: 0.25,
-      max_tokens: Math.max(9000, poolSize * 700), response_format: { type: 'json_object' },
+      temperature: 1.2,
+      top_p: 1,
+      frequency_penalty: 0.7,
+      presence_penalty: 0.6,
+      max_tokens: Math.max(10000, poolSize * 750),
+      response_format: { type: 'json_object' },
     },
   })
   const content = response.data.choices?.[0]?.message?.content
@@ -149,33 +182,34 @@ async function requestQuizPool(prompt: string, model: string, poolSize: number, 
 
 export async function generateQuizWithOpenRouter(text: string, numQuestions = 5, model = OPENROUTER_MODEL, previousQuestions: string[] = []): Promise<GeneratedQuiz> {
   if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+
   const documentText = buildStudyContext(text)
   const generationId = crypto.randomUUID()
   const documentFingerprint = crypto.createHash('sha256').update(documentText).digest('hex').slice(0, 16)
-  const previousQuestionFingerprints = new Set(previousQuestions.map(questionFingerprint))
-  const poolSize = Math.max(numQuestions * 3, 15)
+  const poolSize = Math.max(numQuestions * 4, 20)
+  const previousForPrompt = previousQuestions.slice(0, 150)
 
-  const buildPrompt = (requestedPoolSize: number, retry = false) => {
-    const excluded = previousQuestions.length > 0
-      ? `\n\nQUESTIONS ALREADY USED\nDo NOT reuse or closely paraphrase these questions. Create different questions testing different aspects of the document:\n${previousQuestions.slice(0, 100).map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND USED QUESTIONS\n`
+  const buildPrompt = (requestedPoolSize: number, retry: number) => {
+    const excluded = previousForPrompt.length > 0
+      ? `\n\nPREVIOUSLY USED QUESTIONS — ABSOLUTELY EXCLUDE THESE\nThese questions were already shown to this user. You must create different questions. Do not ask the same thing with different wording. Do not simply swap the options. Test different information from the document.\n${previousForPrompt.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND PREVIOUSLY USED QUESTIONS\n`
       : ''
-    return `Generate a fresh study quiz pool using ONLY the uploaded document.\n\nREQUEST ID: ${generationId}-${retry ? 'retry' : 'initial'}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nGenerate exactly ${requestedPoolSize} substantially different questions. The application will randomly choose ${numQuestions} NEW questions from this pool.\n\nAlso generate ONE concise, natural title for this study material, like an AI chat title. The title should describe the main subject of the document, not the file name and not the quiz itself. Prefer 2-5 words. Examples: "Latif Layers Application", "Cell Biology Basics", "Marketing Strategy Notes", "Database Normalization". Do not include dates, file extensions, "Quiz", "Study", "Notes", or generic phrases unless they are genuinely part of the subject.\n\nFRESHNESS IS REQUIRED:\n- This is a completely new quiz generation request.\n- Every generated quiz must be different from all quizzes previously generated for this user.\n- Never reuse an earlier question, even when the exact same document is uploaded again.\n- Do not merely change wording of a previously used question; test a different fact, relationship, section, comparison, implication, or application.\n- Cover different sections, concepts, facts, relationships, comparisons, details, and applications when supported.\n- Use varied wording and correct-answer positions.\n- Do not repeat or create near-duplicate questions.\n${excluded}\nGROUNDING:\n- Use ONLY information contained in the uploaded document.\n- Do not use outside knowledge.\n- Every question must be answerable directly from the document.\n- Every question must have exactly four options: A, B, C, D.\n- Exactly one option must be correct.\n- Every question must include a concise explanation.\n- sourceReference is optional and must not be invented.\n\nReturn JSON only in this shape:\n{"title":"Latif Layers Application","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"...","sourceReference":"..."}]}\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
+
+    return `Create a NEW study quiz from the uploaded document.\n\nGENERATION ID: ${generationId}\nATTEMPT: ${retry + 1}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nGenerate exactly ${requestedPoolSize} candidate questions. The application will select ${numQuestions} questions only after checking them against every previous quiz.\n\nThe new quiz must be meaningfully different from every earlier quiz, including when the exact same document is uploaded again. Prioritize different sections, facts, relationships, examples, definitions, comparisons, processes, consequences, and applications. Never recycle the same core fact as an earlier question.\n\nGenerate one short natural title describing the document's main subject. Make it 2-5 words, like an AI chat title. Do not use the filename, date, or the word Quiz.\n${excluded}\n\nRULES:\n- Use ONLY the uploaded document.\n- Exactly four options per question: A, B, C, D.\n- Exactly one correct answer.\n- Include a concise explanation.\n- Do not invent facts or citations.\n- Do not repeat or closely paraphrase any previous question.\n- Do not generate a pool where several questions test the same fact.\n\nReturn JSON only:\n{"title":"Natural Subject Title","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"..."}]}\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
   }
 
-  let lastValidationError: Error | null = null
-  for (let attempt = 0; attempt < 3; attempt++) {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      const requestedPoolSize = attempt === 0 ? poolSize : Math.max(numQuestions * 4, 20)
-      const value = await requestQuizPool(buildPrompt(requestedPoolSize, attempt > 0), model, requestedPoolSize, generationId)
+      const requestedPoolSize = attempt === 0 ? poolSize : Math.max(numQuestions * 5, 25)
+      const value = await requestQuizPool(buildPrompt(requestedPoolSize, attempt), model, requestedPoolSize, generationId)
       const validated = validateQuiz(value, numQuestions)
-      return createFreshQuiz(validated.questions, numQuestions, previousQuestionFingerprints, validated.title)
+      return createFreshQuiz(validated.questions, numQuestions, previousQuestions, validated.title)
     } catch (error) {
-      lastValidationError = error instanceof Error ? error : new Error('Quiz generation failed.')
-      if (attempt < 2) continue
-      throw lastValidationError
+      lastError = error instanceof Error ? error : new Error('Quiz generation failed.')
+      if (attempt === 3) throw lastError
     }
   }
-  throw lastValidationError || new Error('Quiz generation failed.')
+  throw lastError || new Error('Quiz generation failed.')
 }
 
 export async function generateQuizFromText(text: string, numQuestions = 5, model?: string, previousQuestions: string[] = []): Promise<GeneratedQuiz> {
