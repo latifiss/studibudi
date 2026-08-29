@@ -68,11 +68,11 @@ const SidebarProfile = ({ loginHref = '/login', signupHref = '/signin', classNam
       ) : <ProfileIcon className="shrink-0 text-[#333333] dark:text-white" />}
 
       {authenticated ? (
-        <button onClick={handleProfileClick} className="flex min-w-0 items-center font-text text-[14px] leading-auto text-[#333333] dark:text-white hover:opacity-70 transition-opacity flex-1 text-left">
+        <button onClick={handleProfileClick} className="flex min-w-0 items-center font-text text-[16px] font-semibold leading-auto text-[#333333] dark:text-white hover:opacity-70 transition-opacity flex-1 text-left">
           <span className="truncate" title={displayName}>{displayName}</span>
         </button>
       ) : (
-        <div className="flex items-center gap-1 font-text text-[14px] leading-auto text-[#333333] dark:text-white">
+        <div className="flex items-center gap-1 font-text text-[16px] font-semibold leading-auto text-[#333333] dark:text-white">
           <Link href={loginHref} className="hover:opacity-70 transition-opacity">Login</Link>
           <span className="text-[#B5B5B5] dark:text-[#6B6B6B]">/</span>
           <Link href={signupHref} className="hover:opacity-70 transition-opacity">Signup</Link>
