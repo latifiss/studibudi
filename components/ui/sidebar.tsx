@@ -62,8 +62,8 @@ const Sidebar = ({ className, onNewQuiz, ...props }: SidebarProps) => {
             <SidebarHead label="QUIZ HISTORY" />
             <div className="h-2" />
             {quizHistory.length > 0 ? (
-              <div className="flex flex-col gap-1 w-full">
-                {quizHistory.map((item) => <SidebarItem key={item.id} href={item.href} label={item.title} active={item.active} className="w-full max-lg:-mx-4 max-lg:w-[calc(100%+2rem)] max-lg:px-4 sm:max-lg:-mx-5 sm:max-lg:w-[calc(100%+2.5rem)] sm:max-lg:px-5" />)}
+              <div className="flex flex-col gap-1 w-full max-lg:-mx-4 max-lg:w-[calc(100%+2rem)] sm:max-lg:-mx-5 sm:max-lg:w-[calc(100%+2.5rem)]">
+                {quizHistory.map((item) => <SidebarItem key={item.id} href={item.href} label={item.title} active={item.active} className="w-full max-lg:px-4 sm:max-lg:px-5" />)}
               </div>
             ) : <div className="text-sm text-muted-foreground px-2 py-4 text-left">Your past quizzes will appear here</div>}
           </> : null}
