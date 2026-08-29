@@ -17,7 +17,7 @@ const SidebarItem = ({ icon, label, href, active = false, onClick, className, ..
       href={href}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 w-full h-10 px-2',
+        'flex items-center gap-3 w-full h-10 px-2 min-w-0 overflow-hidden',
         'font-text text-[16px] font-semibold leading-auto',
         'bg-transparent text-[#333333] dark:text-white',
         'transition-all duration-200 ease-in-out',
@@ -28,7 +28,7 @@ const SidebarItem = ({ icon, label, href, active = false, onClick, className, ..
       {...props}
     >
       {icon && <span className="shrink-0 text-[#333333] dark:text-white">{icon}</span>}
-      <span className="truncate">{label}</span>
+      <span className="min-w-0 truncate" title={label}>{label}</span>
     </Link>
   )
 }
