@@ -71,7 +71,7 @@ function extractTextFromTXT(buffer: ArrayBuffer): string {
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   try {
     // Dynamic import to avoid issues if pdf-parse is not installed
-    const pdfParse = await import('pdf-parse')
+    const pdfParse = await import('pdf-parse/lib/pdf-parse')
     const data = await pdfParse.default(Buffer.from(buffer))
     return data.text
   } catch (error) {
