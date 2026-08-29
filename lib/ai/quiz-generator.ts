@@ -59,8 +59,8 @@ const normalizeQuestionText = (value: string) => value.toLowerCase().replace(/[^
 const questionFingerprint = (question: Question | string) => crypto.createHash('sha256').update(normalizeQuestionText(typeof question === 'string' ? question : question.question)).digest('hex')
 const questionTokens = (value: string) => new Set(normalizeQuestionText(value).split(' ').filter(token => token.length > 2))
 
-// This is intentionally conservative. We want to block obvious copies, not legitimate
-// paraphrases that test the same material from a different angle.
+// Only block very obvious copies. Legitimate paraphrases and different questions
+// about the same concept are allowed, especially when the source is small.
 const questionSimilarity = (a: string, b: string) => {
   const left = questionTokens(a)
   const right = questionTokens(b)
@@ -72,14 +72,7 @@ const questionSimilarity = (a: string, b: string) => {
 
 const isExactOrObviousCopy = (question: string, previousQuestions: string[]) => {
   const normalized = normalizeQuestionText(question)
-  return previousQuestions.some(previous => {
-    const previousNormalized = normalizeQuestionText(previous)
-    if (normalized === previousNormalized) return true
-    const similarity = questionSimilarity(question, previous)
-    // Only reject when nearly all meaningful words are shared. This allows
-    // legitimate paraphrasing while blocking copy/paste-style rewrites.
-    return similarity >= 0.92
-  })
+  return previousQuestions.some(previous => normalized === normalizeQuestionText(previous) || questionSimilarity(question, previous) >= 0.95)
 }
 
 const normalizeOptionId = (id: unknown, index: number): string => {
@@ -117,11 +110,10 @@ const cleanTitle = (value: unknown): string => {
   return (title || 'Study Session').slice(0, 70)
 }
 
-const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz => {
-  if (!value || typeof value !== 'object' || !Array.isArray((value as GeneratedQuiz).questions)) throw new Error('The AI returned an invalid quiz structure.')
-  const questions = (value as GeneratedQuiz).questions.map(normalizeQuestion).filter(isValidQuestion)
-  if (questions.length < minimumQuestions) throw new Error(`The AI returned only ${questions.length} usable questions. Please try again.`)
-  return { questions, title: cleanTitle((value as { title?: unknown }).title) }
+const extractQuestions = (value: unknown): { questions: Question[]; title: string } => {
+  if (!value || typeof value !== 'object' || !Array.isArray((value as any).questions)) return { questions: [], title: cleanTitle((value as any)?.title) }
+  const questions = (value as any).questions.map(normalizeQuestion).filter(isValidQuestion)
+  return { questions, title: cleanTitle((value as any).title) }
 }
 
 const secureShuffle = <T,>(items: T[]): T[] => {
@@ -140,36 +132,33 @@ const randomizeQuestion = (question: Question, index: number): Question => {
   return { ...question, id: String(index + 1), options, correctAnswer: optionIds[correctIndex] }
 }
 
-const createFreshQuiz = (pool: Question[], numQuestions: number, previousQuestions: string[], title: string): GeneratedQuiz => {
-  const unique: Question[] = []
-  const seenFingerprints = new Set<string>()
-  for (const question of secureShuffle(pool)) {
+const selectFreshQuestions = (candidates: Question[], numQuestions: number, previousQuestions: string[]) => {
+  const selected: Question[] = []
+  const seen = new Set<string>()
+  for (const question of secureShuffle(candidates)) {
     const fingerprint = questionFingerprint(question)
-    if (seenFingerprints.has(fingerprint)) continue
-    // Block exact copies and obvious copy-with-minor-edits rewrites. Do not
-    // reject questions merely because they cover a related concept.
+    if (seen.has(fingerprint)) continue
     if (isExactOrObviousCopy(question.question, previousQuestions)) continue
-    if (unique.some(existing => isExactOrObviousCopy(question.question, [existing.question]))) continue
-    seenFingerprints.add(fingerprint)
-    unique.push(question)
+    if (selected.some(existing => isExactOrObviousCopy(question.question, [existing.question]))) continue
+    seen.add(fingerprint)
+    selected.push(question)
+    if (selected.length === numQuestions) break
   }
-  const selected = secureShuffle(unique).slice(0, numQuestions)
-  if (selected.length < numQuestions) throw new Error(`Not enough new questions were generated. Needed ${numQuestions}, found ${selected.length}.`)
-  return { questions: selected.map((question, index) => randomizeQuestion(question, index)), title: cleanTitle(title) }
+  return selected
 }
 
-async function requestQuizPool(prompt: string, model: string, poolSize: number, generationId: string): Promise<unknown> {
+async function requestQuiz(prompt: string, model: string, generationId: string, maxTokens = 10000): Promise<unknown> {
   const response = await fetchWithRetry('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${OPENROUTER_API_KEY}`, 'HTTP-Referer': OPENROUTER_SITE_URL, 'X-Title': OPENROUTER_SITE_NAME, 'Content-Type': 'application/json', 'Cache-Control': 'no-cache, no-store, max-age=0', Pragma: 'no-cache' },
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a genuinely fresh question pool for every request. Previously used questions may be revisited only when the new question is meaningfully different. Never copy or lightly rewrite an old question. Use only the supplied document.' },
+        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Always produce the requested number of complete usable questions. Previously used questions should not be copied, but legitimate paraphrases and different questions about the same concept are allowed.' },
         { role: 'user', content: prompt },
       ],
       temperature: 1.2, top_p: 1, frequency_penalty: 0.7, presence_penalty: 0.6,
-      max_tokens: Math.max(10000, poolSize * 750), response_format: { type: 'json_object' },
+      max_tokens: maxTokens, response_format: { type: 'json_object' },
     },
   })
   const content = response.data.choices?.[0]?.message?.content
@@ -182,29 +171,44 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
   const documentText = buildStudyContext(text)
   const generationId = crypto.randomUUID()
   const documentFingerprint = crypto.createHash('sha256').update(documentText).digest('hex').slice(0, 16)
-  const poolSize = Math.max(numQuestions * 4, 20)
   const previousForPrompt = previousQuestions.slice(0, 150)
 
-  const buildPrompt = (requestedPoolSize: number, retry: number) => {
-    const excluded = previousForPrompt.length > 0
-      ? `\n\nPREVIOUSLY USED QUESTIONS\nThese questions were already shown. Do not copy or lightly rewrite them. You ARE allowed to revisit the same concepts when necessary, but ask a genuinely different question: use another detail, relationship, example, application, comparison, question type, or perspective. Reusing an answer choice is fine when it is factually correct.\n${previousForPrompt.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND PREVIOUSLY USED QUESTIONS\n`
-      : ''
-    return `Create a NEW study quiz from the uploaded document.\n\nGENERATION ID: ${generationId}\nATTEMPT: ${retry + 1}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\nGenerate exactly ${requestedPoolSize} candidate questions. The application will select ${numQuestions} questions after checking them against previous quizzes.\n\nFRESHNESS:\n- Never return an exact previous question.\n- Never make a trivial paraphrase of a previous question.\n- If the document has limited material, it is OK to revisit a concept. Change the angle, question type, detail being tested, relationship, scenario, or wording substantially.\n- Do not require unique answer options across quizzes. Correct options can naturally recur.\n- Do not force unrelated questions simply to be different; stay grounded in the document.\n- Vary question types where the material supports it: recall, definition, comparison, cause/effect, application, scenario, sequence, identification, relationship, or true-statement selection.\n\nGenerate one short natural title describing the document's main subject. Make it 2-5 words, like an AI chat title. Do not use the filename, date, or the word Quiz.\n${excluded}\n\nRULES:\n- Use ONLY the uploaded document.\n- Exactly four options per question: A, B, C, D.\n- Exactly one correct answer.\n- Include a concise explanation.\n- Do not invent facts or citations.\n- Do not repeat or lightly paraphrase a previous question.\n- Do not make several candidates test the exact same fact.\n\nReturn JSON only:\n{"title":"Natural Subject Title","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"..."}]}\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
+  const baseRules = `Use ONLY the uploaded document. Generate exactly ${numQuestions} complete questions. Each question must have exactly four options A, B, C, D, exactly one correct answer, and a concise explanation. Never omit a question. Never return placeholders. Do not copy a previous question verbatim or make a trivial wording change. However, you may revisit the same concept when the document is limited; use a different detail, angle, question type, scenario, relationship, or perspective. Reusing correct or incorrect answer choices is completely allowed when they fit. Vary question types when supported by the material.`
+  const previousBlock = previousForPrompt.length
+    ? `\n\nPREVIOUS QUESTIONS\nDo not reproduce these questions. You may test the same subject matter differently if needed.\n${previousForPrompt.map((q, i) => `${i + 1}. ${q}`).join('\n')}\nEND PREVIOUS QUESTIONS\n`
+    : ''
+
+  const makePrompt = (missing: number, existing: Question[] = []) => {
+    const existingBlock = existing.length ? `\n\nALREADY ACCEPTED IN THIS REQUEST\nDo not duplicate these accepted questions:\n${existing.map((q, i) => `${i + 1}. ${q.question}`).join('\n')}\nEND ACCEPTED\n` : ''
+    return `Generate a fresh study quiz from the uploaded document.\n\nGENERATION ID: ${generationId}\nDOCUMENT INSTANCE: ${documentFingerprint}\n\n${baseRules}\n\nYou need to provide ${missing} NEW question${missing === 1 ? '' : 's'} in this response.${previousBlock}${existingBlock}\n\nAlso return ONE short natural AI-style title describing the document's main subject. Use 2-5 words. Do not use the filename, date, or the word Quiz.\n\nReturn JSON only in this shape:\n{"title":"Natural Subject Title","questions":[{"id":"1","question":"...","options":[{"id":"A","label":"..."},{"id":"B","label":"..."},{"id":"C","label":"..."},{"id":"D","label":"..."}],"correctAnswer":"A","explanation":"..."}]}\n\nIMPORTANT: Return exactly ${missing} complete questions.\n\nUPLOADED DOCUMENT\n${documentText}\nEND DOCUMENT`
   }
 
+  let accepted: Question[] = []
+  let title = 'Study Session'
   let lastError: Error | null = null
-  for (let attempt = 0; attempt < 4; attempt++) {
+
+  // First request asks for the complete quiz. If the model returns fewer usable
+  // questions, later requests fill only the missing slots instead of failing.
+  for (let attempt = 0; attempt < 5 && accepted.length < numQuestions; attempt++) {
     try {
-      const requestedPoolSize = attempt === 0 ? poolSize : Math.max(numQuestions * 5, 25)
-      const value = await requestQuizPool(buildPrompt(requestedPoolSize, attempt), model, requestedPoolSize, generationId)
-      const validated = validateQuiz(value, numQuestions)
-      return createFreshQuiz(validated.questions, numQuestions, previousQuestions, validated.title)
+      const missing = numQuestions - accepted.length
+      const requested = attempt === 0 ? numQuestions : Math.max(missing + 2, missing)
+      const value = await requestQuiz(makePrompt(requested, accepted), model, generationId, Math.max(10000, requested * 800))
+      const extracted = extractQuestions(value)
+      if (extracted.title !== 'Study Session') title = extracted.title
+      const fresh = selectFreshQuestions(extracted.questions, missing, [...previousForPrompt, ...accepted.map(q => q.question)])
+      accepted = [...accepted, ...fresh]
+      if (accepted.length >= numQuestions) break
     } catch (error) {
       lastError = error instanceof Error ? error : new Error('Quiz generation failed.')
-      if (attempt === 3) throw lastError
     }
   }
-  throw lastError || new Error('Quiz generation failed.')
+
+  if (accepted.length < numQuestions) {
+    throw lastError || new Error(`The AI could not produce ${numQuestions} complete questions. Please try again.`)
+  }
+
+  return { questions: accepted.slice(0, numQuestions).map((question, index) => randomizeQuestion(question, index)), title: cleanTitle(title) }
 }
 
 export async function generateQuizFromText(text: string, numQuestions = 5, model?: string, previousQuestions: string[] = []): Promise<GeneratedQuiz> {
