@@ -18,7 +18,6 @@ export default function PaddleUpgradeButton({
 
   useEffect(() => {
     const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-
     if (!token) {
       console.error("NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is not configured");
       setLoading(false);
@@ -39,8 +38,12 @@ export default function PaddleUpgradeButton({
 
   const openCheckout = () => {
     const priceId = process.env.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID;
-
     if (!paddle || !priceId) return;
+
+    // Paddle's success URL sends the customer back into the authenticated app.
+    // The dashboard then refreshes entitlements so the new PRO subscription is
+    // reflected everywhere as soon as Paddle's webhook has reached our backend.
+    const successUrl = `${window.location.origin}/dashboard?payment=success`;
 
     paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
@@ -49,6 +52,7 @@ export default function PaddleUpgradeButton({
         displayMode: "overlay",
         theme: "light",
         variant: "one-page",
+        successUrl,
       },
     });
   };
