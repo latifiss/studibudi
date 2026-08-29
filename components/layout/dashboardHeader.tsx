@@ -10,38 +10,26 @@ import SidebarMobile from '@/components/ui/sidebarMobile'
 const DashboardHeader = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen)
+  const toggleSidebar = () => setIsSidebarOpen((open) => !open)
+  const handleNewQuiz = () => {
+    localStorage.removeItem('currentQuiz')
+    localStorage.removeItem('currentQuizId')
+    window.dispatchEvent(new Event('studibudi:open-upload'))
   }
 
   return (
     <>
-      <header className='lg:hidden flex items-center justify-between w-full h-18 px-4 border-b border-border bg-white relative z-50'>
-        <button
-          onClick={toggleSidebar}
-          className="p-1 hover:opacity-70 transition-opacity"
-          aria-label="Toggle sidebar"
-        >
+      <header className="lg:hidden flex items-center justify-between w-full h-18 px-4 border-b border-border bg-white relative z-50">
+        <button onClick={toggleSidebar} className="p-1 hover:opacity-70 transition-opacity" aria-label="Toggle sidebar">
           <Menu className="w-6 h-6 text-foreground" />
         </button>
-
-        <Link 
-          href="/"
-          className="cursor-pointer hover:opacity-70 transition-opacity"
-          aria-label="Go to home"
-        >
+        <Link href="/" className="cursor-pointer hover:opacity-70 transition-opacity" aria-label="Go to home">
           <Wordmark className="text-foreground" />
         </Link>
-
-        <button
-          onClick={() => console.log('New chat')}
-          className="flex items-center justify-center w-9 h-9 rounded-full border border-border hover:bg-gray-50 transition-colors"
-          aria-label="New chat"
-        >
+        <button onClick={handleNewQuiz} className="flex items-center justify-center w-9 h-9 rounded-full border border-border hover:bg-gray-50 transition-colors" aria-label="New chat">
           <ChatIcon className="w-5 h-5 text-foreground" />
         </button>
       </header>
-
       <SidebarMobile isOpen={isSidebarOpen} onClose={toggleSidebar} />
     </>
   )
