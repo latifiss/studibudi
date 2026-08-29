@@ -70,27 +70,57 @@ const buildStudyContext = (text: string, maxCharacters = 50000) => {
   return selected.join('\n\n')
 }
 
-const normalizeQuestion = (question: any, index: number): Question => ({
-  id: String(question?.id || index + 1),
-  question: String(question?.question || '').trim(),
-  options: Array.isArray(question?.options)
-    ? question.options.slice(0, 4).map((option: any) => ({
-        id: String(option?.id || '').trim().toUpperCase(),
-        label: String(option?.label || '').trim(),
-      }))
-    : [],
-  correctAnswer: String(question?.correctAnswer || '').trim().toUpperCase(),
-  explanation: String(question?.explanation || '').trim(),
-  sourceReference: String(question?.sourceReference || '').trim(),
-})
+const normalizeOptionId = (id: unknown, index: number): string => {
+  const value = String(id ?? '').trim().toUpperCase()
+  const numericMap: Record<string, string> = { '1': 'A', '2': 'B', '3': 'C', '4': 'D' }
+  return numericMap[value] || value || ['A', 'B', 'C', 'D'][index] || ''
+}
 
-const isValidQuestion = (question: Question): boolean =>
-  question.question.length >= 10 &&
-  question.options.length === 4 &&
-  ['A', 'B', 'C', 'D'].every((id) => question.options.some((option) => option.id === id && option.label)) &&
-  ['A', 'B', 'C', 'D'].includes(question.correctAnswer) &&
-  question.options.some((option) => option.id === question.correctAnswer) &&
-  Boolean(question.explanation)
+const normalizeQuestion = (question: any, index: number): Question => {
+  const rawOptions = Array.isArray(question?.options) ? question.options : []
+  const options = rawOptions.slice(0, 4).map((option: any, optionIndex: number) => {
+    if (typeof option === 'string') {
+      return { id: ['A', 'B', 'C', 'D'][optionIndex], label: option.trim() }
+    }
+    return {
+      id: normalizeOptionId(option?.id, optionIndex),
+      label: String(option?.label ?? option?.text ?? '').trim(),
+    }
+  })
+
+  const correctRaw = String(question?.correctAnswer ?? question?.answer ?? '').trim().toUpperCase()
+  const numericCorrectMap: Record<string, string> = { '1': 'A', '2': 'B', '3': 'C', '4': 'D', 'OPTION 1': 'A', 'OPTION 2': 'B', 'OPTION 3': 'C', 'OPTION 4': 'D' }
+  let correctAnswer = numericCorrectMap[correctRaw] || correctRaw
+
+  if (!['A', 'B', 'C', 'D'].includes(correctAnswer)) {
+    const matchingIndex = options.findIndex((option) => option.label.toUpperCase() === correctRaw)
+    if (matchingIndex >= 0) correctAnswer = ['A', 'B', 'C', 'D'][matchingIndex]
+  }
+
+  const explanation = String(question?.explanation || question?.rationale || '').trim()
+  const sourceReference = String(question?.sourceReference || '').trim()
+
+  return {
+    id: String(question?.id || index + 1),
+    question: String(question?.question || question?.prompt || '').trim(),
+    options,
+    correctAnswer,
+    explanation: explanation || sourceReference || 'The correct answer is supported by the uploaded document.',
+    sourceReference,
+  }
+}
+
+const isValidQuestion = (question: Question): boolean => {
+  const optionIds = question.options.map((option) => option.id)
+
+  return question.question.length >= 10 &&
+    question.options.length === 4 &&
+    new Set(optionIds).size === 4 &&
+    ['A', 'B', 'C', 'D'].every((id) => question.options.some((option) => option.id === id && option.label.length > 0)) &&
+    ['A', 'B', 'C', 'D'].includes(question.correctAnswer) &&
+    question.options.some((option) => option.id === question.correctAnswer && option.label.length > 0) &&
+    question.explanation.length > 0
+}
 
 const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz => {
   if (!value || typeof value !== 'object' || !Array.isArray((value as GeneratedQuiz).questions)) {
@@ -100,7 +130,7 @@ const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz =
   const questions = (value as GeneratedQuiz).questions.map(normalizeQuestion).filter(isValidQuestion)
 
   if (questions.length < minimumQuestions) {
-    throw new Error('The AI returned incomplete quiz questions. Please try again.')
+    throw new Error(`The AI returned only ${questions.length} usable questions. Please try again.`)
   }
 
   return { questions }
@@ -120,9 +150,7 @@ const randomizeQuestion = (question: Question, index: number): Question => {
   const optionIds = ['A', 'B', 'C', 'D']
   const correctLabel = question.options.find((option) => option.id === question.correctAnswer)?.label
 
-  if (!correctLabel) {
-    return { ...question, id: String(index + 1) }
-  }
+  if (!correctLabel) return { ...question, id: String(index + 1) }
 
   const options = shuffled.map((option, optionIndex) => ({
     id: optionIds[optionIndex],
@@ -154,6 +182,41 @@ const createFreshQuiz = (pool: Question[], numQuestions: number): GeneratedQuiz 
   }
 }
 
+async function requestQuizPool(prompt: string, model: string, poolSize: number, generationId: string): Promise<unknown> {
+  const response = await fetchWithRetry('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': OPENROUTER_SITE_URL,
+      'X-Title': OPENROUTER_SITE_NAME,
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, max-age=0',
+      Pragma: 'no-cache',
+    },
+    data: {
+      model,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool for every request. Use only the supplied document.',
+        },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 1,
+      top_p: 0.95,
+      frequency_penalty: 0.35,
+      presence_penalty: 0.25,
+      max_tokens: Math.max(9000, poolSize * 700),
+      response_format: { type: 'json_object' },
+    },
+  })
+
+  const content = response.data.choices?.[0]?.message?.content
+  if (!content) throw new Error(`No content received from AI for generation ${generationId}.`)
+
+  return JSON.parse(content)
+}
+
 export async function generateQuizWithOpenRouter(text: string, numQuestions = 5, model = OPENROUTER_MODEL): Promise<GeneratedQuiz> {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
@@ -162,23 +225,21 @@ export async function generateQuizWithOpenRouter(text: string, numQuestions = 5,
   const documentText = buildStudyContext(text)
   const generationId = crypto.randomUUID()
   const documentFingerprint = crypto.createHash('sha256').update(documentText).digest('hex').slice(0, 16)
-  const poolSize = Math.max(numQuestions * 3, 12)
+  const poolSize = Math.max(numQuestions * 2, 10)
 
-  const prompt = `Generate a fresh question pool for a study quiz using ONLY the uploaded document.
+  const buildPrompt = (requestedPoolSize: number, retry = false) => `Generate a fresh question pool for a study quiz using ONLY the uploaded document.
 
-REQUEST ID: ${generationId}
+REQUEST ID: ${generationId}-${retry ? 'retry' : 'initial'}
 DOCUMENT INSTANCE: ${documentFingerprint}
 
-Generate exactly ${poolSize} substantially different questions. The application will randomly choose ${numQuestions} questions from this pool after you respond.
+Generate exactly ${requestedPoolSize} substantially different questions. The application will randomly choose ${numQuestions} questions from this pool after you respond.
 
 FRESHNESS IS REQUIRED:
 - This is a new quiz request, even if the same document was uploaded before.
 - Do not produce a fixed or memorized set of questions.
-- Do not focus only on the first or most obvious facts in the document.
 - Cover different sections, concepts, facts, relationships, comparisons, details, and applications when supported.
 - Use varied question wording and varied correct-answer positions.
 - Do not repeat a question or create near-duplicate questions.
-- The request ID and document instance are only uniqueness markers. Never ask questions about them.
 
 GROUNDING:
 - Use ONLY information contained in the uploaded document.
@@ -186,8 +247,8 @@ GROUNDING:
 - Every question must be answerable directly from the document.
 - Every question must have exactly four options: A, B, C, D.
 - Exactly one option must be correct.
-- Explanations must be supported by the document.
-- sourceReference must be a short quote or precise description of the supporting passage, maximum 220 characters.
+- Every question must include a concise explanation.
+- sourceReference is optional and should be included only when supported by the document.
 - Do not invent page numbers, citations, facts, names, dates, or statistics.
 
 Return JSON only in this shape:
@@ -213,39 +274,22 @@ UPLOADED DOCUMENT
 ${documentText}
 END DOCUMENT`
 
-  const response = await fetchWithRetry('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-      'HTTP-Referer': OPENROUTER_SITE_URL,
-      'X-Title': OPENROUTER_SITE_NAME,
-      'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache, no-store, max-age=0',
-      Pragma: 'no-cache',
-    },
-    data: {
-      model,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool for every request. Never reuse a fixed quiz. Use only the supplied document.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 1,
-      top_p: 0.95,
-      frequency_penalty: 0.35,
-      presence_penalty: 0.25,
-      max_tokens: Math.max(7000, poolSize * 650),
-      response_format: { type: 'json_object' },
-    },
-  })
+  let lastValidationError: Error | null = null
 
-  const content = response.data.choices?.[0]?.message?.content
-  if (!content) throw new Error('No content received from AI.')
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const requestedPoolSize = attempt === 0 ? poolSize : Math.max(numQuestions + 3, 8)
+      const value = await requestQuizPool(buildPrompt(requestedPoolSize, attempt > 0), model, requestedPoolSize, generationId)
+      const pool = validateQuiz(value, numQuestions).questions
+      return createFreshQuiz(pool, numQuestions)
+    } catch (error) {
+      lastValidationError = error instanceof Error ? error : new Error('Quiz generation failed.')
+      if (attempt === 0) continue
+      throw lastValidationError
+    }
+  }
 
-  const pool = validateQuiz(JSON.parse(content), numQuestions).questions
-  return createFreshQuiz(pool, numQuestions)
+  throw lastValidationError || new Error('Quiz generation failed.')
 }
 
 export async function generateQuizFromText(text: string, numQuestions = 5, model?: string): Promise<GeneratedQuiz> {
