@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { ProfileIcon } from '@/public/icons/mono'
 
@@ -21,8 +22,10 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
   const [isCancelling, setIsCancelling] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [liveTier, setLiveTier] = useState<'free' | 'pro'>(tier)
+  const [mounted, setMounted] = useState(false)
   const modalRef = useRef<HTMLDivElement>(null)
 
+  useEffect(() => { setMounted(true); return () => setMounted(false) }, [])
   useEffect(() => { setLiveTier(tier) }, [tier])
 
   useEffect(() => {
@@ -56,7 +59,7 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
     return () => { cancelled = true }
   }, [isOpen])
 
-  if (!isOpen) return null
+  if (!isOpen || !mounted) return null
 
   const tierLabel = liveTier === 'free' ? 'Free' : 'Pro'
   const tierColor = liveTier === 'free' ? 'text-[#737373]' : 'text-[#4F4CF0]'
@@ -75,8 +78,8 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
     try { await onLogout() } catch (error) { console.error('Logout failed:', error); setIsLoggingOut(false) }
   }
 
-  return (
-    <div ref={modalRef} className="fixed z-[60] w-70" style={{ top: position.top, right: position.right }}>
+  return createPortal(
+    <div ref={modalRef} className="fixed z-[9999] w-70" style={{ top: position.top, right: position.right }}>
       <div className={cn('bg-white dark:bg-[#1a1a2e] rounded-2xl w-full', 'shadow-[0_8px_16px_-12px_rgba(0,0,0,0.8),0_12px_16px_-12px_rgba(79,76,240,0.64)]', 'relative overflow-hidden', 'border border-[#E5E5E5] dark:border-[#2a2a3e]')}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[#E5E5E5] dark:border-[#2a2a3e]">
           <div className="w-10 h-10 rounded-full bg-[#F5F5F5] dark:bg-[#2a2a3e] flex items-center justify-center overflow-hidden"><ProfileIcon className="w-5 h-5 text-[#333333] dark:text-white" /></div>
@@ -86,27 +89,18 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
           </div>
           <button type="button" onClick={onClose} aria-label="Close profile" className="text-[#737373] hover:text-[#333333] dark:hover:text-white text-xl leading-none">×</button>
         </div>
-
         <div className="py-2">
           <button onClick={liveTier === 'free' ? onUpgrade : undefined} className={cn('flex items-center justify-between w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', liveTier === 'pro' && 'cursor-default')}>
             <span className="text-[#333333] dark:text-white">Current Plan</span>
             <span className={cn('font-semibold', tierColor)}>{tierLabel}</span>
           </button>
-
-          {liveTier === 'pro' && onCancel && (
-            <button onClick={handleCancel} disabled={isCancelling} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium text-[#FE1212] disabled:opacity-50')}>
-              {isCancelling ? 'Cancelling...' : 'Cancel subscription'}
-            </button>
-          )}
-
+          {liveTier === 'pro' && onCancel && <button onClick={handleCancel} disabled={isCancelling} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium text-[#FE1212] disabled:opacity-50')}>{isCancelling ? 'Cancelling...' : 'Cancel subscription'}</button>}
           <div className="h-px bg-[#E5E5E5] dark:bg-[#2a2a3e] mx-5" />
-
-          <button onClick={handleLogout} disabled={isLoggingOut} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', 'text-[#FE1212] disabled:opacity-50')}>
-            {isLoggingOut ? 'Logging out...' : 'Logout'}
-          </button>
+          <button onClick={handleLogout} disabled={isLoggingOut} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', 'text-[#FE1212] disabled:opacity-50')}>{isLoggingOut ? 'Logging out...' : 'Logout'}</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
 
