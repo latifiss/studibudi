@@ -86,7 +86,18 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
   return (
     <>
       {isLoading && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"><Loader onComplete={() => {}} /></div>}
-      <div className={cn('flex flex-col items-start p-4 sm:p-6 lg:p-6 bg-white rounded-3xl relative', isAlternate ? 'w-full max-w-[961px] h-[349px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[231px] sm:h-[279px] lg:h-[612px]', 'shadow-[0px_0px_1px_rgba(0,0,0,0.05),0px_3.2px_89.6px_-25.6px_rgba(0,0,0,0.1),0px_6.4px_102.4px_-38.4px_rgba(0,0,0,0.2),0px_12.8px_64px_-38.4px_rgba(0,0,0,0.3),0px_19.2px_76.8px_-51.2px_rgba(0,0,0,0.4),0px_25.6px_89.6px_-64px_rgba(0,0,0,0.5)', 'after:absolute after:inset-0 after:rounded-3xl after:pointer-events-none after:bg-white/0.002 z-0', isDragging && 'ring-2 ring-[#4F4CF0] ring-offset-2', className)} onDrop={handleDrop} onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }} onDragLeave={(event) => { event.preventDefault(); setIsDragging(false) }}>
+      <div
+        className={cn(
+          'flex flex-col items-start p-4 sm:p-6 lg:p-6 bg-white rounded-3xl relative',
+          isAlternate ? 'w-full max-w-[961px] h-[349px] lg:h-[261.75px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[231px] sm:h-[279px] lg:h-[612px]',
+          'shadow-[0px_0px_1px_rgba(0,0,0,0.05),0px_3.2px_89.6px_-25.6px_rgba(0,0,0,0.1),0px_6.4px_102.4px_-38.4px_rgba(0,0,0,0.2),0px_12.8px_64px_-38.4px_rgba(0,0,0,0.3),0px_19.2px_76.8px_-51.2px_rgba(0,0,0,0.4),0px_25.6px_89.6px_-64px_rgba(0,0,0,0.5)]',
+          'after:absolute after:inset-0 after:rounded-3xl after:pointer-events-none after:bg-white/0.002 z-0',
+          isDragging && 'ring-2 ring-[#4F4CF0] ring-offset-2', className
+        )}
+        onDrop={handleDrop}
+        onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }}
+        onDragLeave={(event) => { event.preventDefault(); setIsDragging(false) }}
+      >
         <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} className="hidden" onChange={handleFileChange} />
         <div className="flex flex-col justify-center items-center w-full h-full z-10 p-4 sm:p-6" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%23737373' stroke-width='1.5' stroke-dasharray='8 8' stroke-dashoffset='0' stroke-linecap='square' rx='12'/%3e%3c/svg%3e")` }}>
           <div className={cn('flex flex-col items-center justify-center w-full h-full', isAlternate ? 'max-w-[320px]' : 'max-w-[189.98px] sm:max-w-[320px] lg:max-w-[320px]')}>
