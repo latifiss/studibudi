@@ -35,13 +35,9 @@ export async function extractTextFromBytes(
     case 'pptx':
       return extractTextFromPPTX(bytes)
     case 'doc':
-      throw new Error(
-        'Legacy .doc files are not supported. Please save the document as DOCX or PDF and upload it again.'
-      )
+      throw new Error('Legacy .doc files are not supported. Please save the document as DOCX or PDF and upload it again.')
     case 'ppt':
-      throw new Error(
-        'Legacy .ppt files are not supported. Please save the presentation as PPTX or PDF and upload it again.'
-      )
+      throw new Error('Legacy .ppt files are not supported. Please save the presentation as PPTX or PDF and upload it again.')
     default:
       throw new Error(`Unsupported file type: ${mimeType || extension || 'unknown'}`)
   }
@@ -54,52 +50,44 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 }
 
 /**
- * Parse PDF entirely from the uploaded bytes.
+ * Server-only PDF extraction.
  *
- * pdf-parse v2's Node entry is intentionally used here. The previous
- * implementation could be transformed into the browser build by Turbopack,
- * which caused DOMMatrix/fake-worker errors and, with older pdf-parse,
- * fallback attempts to ./test/data/*.pdf.
+ * IMPORTANT: pdf-parse v2 loads PDF.js during module evaluation. On Vercel,
+ * PDF.js needs the canvas globals supplied by @napi-rs/canvas. The worker
+ * module must therefore be imported before pdf-parse itself.
  */
 async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
-  let parser: { getText: () => Promise<{ text?: string }>; destroy: () => Promise<void> } | null = null
-
   try {
-    const pdfParse = await import('pdf-parse')
-    const PDFParse = pdfParse.PDFParse
+    const { CanvasFactory } = await import('pdf-parse/worker')
+    const { PDFParse } = await import('pdf-parse')
 
-    if (typeof PDFParse !== 'function') {
-      throw new Error('PDF parser is unavailable in the server runtime.')
-    }
-
-    parser = new PDFParse({
+    const parser = new PDFParse({
       data: Buffer.from(bytes),
+      CanvasFactory,
     })
 
-    const result = await parser.getText()
-    const text = normalizeText(result?.text || '')
+    try {
+      const result = await parser.getText()
+      const text = normalizeText(result?.text || '')
 
-    if (!text) {
-      throw new Error(
-        'No readable text was found in this PDF. The PDF may be scanned or contain only images.'
-      )
+      if (!text) {
+        throw new Error(
+          'No readable text was found in this PDF. The PDF may be scanned or contain only images.'
+        )
+      }
+
+      return text
+    } finally {
+      await parser.destroy()
     }
-
-    return text
   } catch (error) {
     console.error('PDF parsing error:', error)
+
     if (error instanceof Error) {
       throw new Error(`Failed to parse PDF: ${error.message}`)
     }
-    throw new Error('Failed to parse PDF.')
-  } finally {
-    if (parser) {
-      try {
-        await parser.destroy()
-      } catch (error) {
-        console.warn('Failed to destroy PDF parser:', error)
-      }
-    }
+
+    throw new Error('Failed to parse PDF. Please ensure the file is a valid, text-based PDF.')
   }
 }
 
@@ -114,10 +102,8 @@ async function extractTextFromDOCX(bytes: Uint8Array): Promise<string> {
     return text
   } catch (error) {
     console.error('DOCX parsing error:', error)
-    if (error instanceof Error) {
-      throw new Error(`Failed to parse DOCX file: ${error.message}`)
-    }
-    throw new Error('Failed to parse DOCX file.')
+    if (error instanceof Error) throw new Error(`Failed to parse DOCX file: ${error.message}`)
+    throw new Error('Failed to parse DOCX file. Please try converting it to PDF or TXT.')
   }
 }
 
@@ -133,15 +119,15 @@ function extractTextFromSpreadsheet(bytes: Uint8Array): string {
     for (const sheetName of workbook.SheetNames) {
       const sheet = workbook.Sheets[sheetName]
       if (!sheet) continue
-      const text = normalizeText(
+      const normalized = normalizeText(
         XLSX.utils.sheet_to_csv(sheet, { blankrows: false, FS: ' | ' })
       )
-      if (text) sections.push(`Sheet: ${sheetName}\n${text}`)
+      if (normalized) sections.push(`Sheet: ${sheetName}\n${normalized}`)
     }
 
-    const result = normalizeText(sections.join('\n\n'))
-    if (!result) throw new Error('No readable data was found in the spreadsheet.')
-    return result
+    const text = normalizeText(sections.join('\n\n'))
+    if (!text) throw new Error('No readable data was found in the spreadsheet.')
+    return text
   } catch (error) {
     console.error('Spreadsheet parsing error:', error)
     if (error instanceof Error) throw new Error(`Failed to parse spreadsheet: ${error.message}`)
@@ -155,7 +141,11 @@ async function extractTextFromPPTX(bytes: Uint8Array): Promise<string> {
     const slideNames = zip
       .list()
       .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
-      .sort((a, b) => Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0) - Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0))
+      .sort((a, b) => {
+        const aNumber = Number(a.match(/slide(\d+)\.xml/i)?.[1] || 0)
+        const bNumber = Number(b.match(/slide(\d+)\.xml/i)?.[1] || 0)
+        return aNumber - bNumber
+      })
 
     if (slideNames.length === 0) throw new Error('No slides were found in the PPTX file.')
 
@@ -237,7 +227,6 @@ class SimpleZip {
 
     const compressed = this.bytes.slice(dataStart, dataEnd)
     let output: Uint8Array
-
     if (entry.method === 0) {
       output = compressed
     } else if (entry.method === 8) {
@@ -245,6 +234,10 @@ class SimpleZip {
       output = new Uint8Array(await new Response(stream).arrayBuffer())
     } else {
       throw new Error(`Unsupported ZIP compression method: ${entry.method}`)
+    }
+
+    if (entry.uncompressedSize > 0 && output.length !== entry.uncompressedSize) {
+      console.warn(`ZIP entry size mismatch for ${name}`)
     }
 
     return new TextDecoder('utf-8').decode(output)
@@ -268,8 +261,9 @@ class SimpleZip {
     const centralDirectoryOffset = view.getUint32(end + 16, true)
     let offset = centralDirectoryOffset
     const endOffset = centralDirectoryOffset + centralDirectorySize
-
-    if (endOffset > this.bytes.length) throw new Error('Invalid ZIP central directory bounds.')
+    if (centralDirectoryOffset < 0 || centralDirectorySize < 0 || endOffset > this.bytes.length) {
+      throw new Error('Invalid ZIP central directory bounds.')
+    }
 
     while (offset < endOffset) {
       if (offset + 46 > this.bytes.length || view.getUint32(offset, true) !== 0x02014b50) {
