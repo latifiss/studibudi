@@ -8,7 +8,7 @@ interface ProfileModalProps {
   isOpen: boolean
   onClose: () => void
   tier: 'free' | 'pro'
-  onLogout: () => void
+  onLogout: () => void | Promise<void>
   onUpgrade?: () => void
   onCancel?: () => Promise<void> | void
   userEmail?: string
@@ -19,7 +19,11 @@ interface ProfileModalProps {
 const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, userEmail, userName, anchorRef }: ProfileModalProps) => {
   const [position, setPosition] = useState({ top: 0, right: 0 })
   const [isCancelling, setIsCancelling] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [liveTier, setLiveTier] = useState<'free' | 'pro'>(tier)
   const modalRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => { setLiveTier(tier) }, [tier])
 
   useEffect(() => {
     if (!isOpen || !anchorRef?.current) return
@@ -37,17 +41,38 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
     }
   }, [isOpen, anchorRef])
 
+  useEffect(() => {
+    if (!isOpen) return
+    let cancelled = false
+    const refreshTier = async () => {
+      try {
+        const response = await fetch('/api/billing/entitlements', { cache: 'no-store' })
+        if (!response.ok) return
+        const data = await response.json()
+        if (!cancelled) setLiveTier(data?.isPro ? 'pro' : 'free')
+      } catch {}
+    }
+    refreshTier()
+    return () => { cancelled = true }
+  }, [isOpen])
+
   if (!isOpen) return null
 
-  const tierLabel = tier === 'free' ? 'Free' : 'Pro'
-  const tierColor = tier === 'free' ? 'text-[#737373]' : 'text-[#4F4CF0]'
+  const tierLabel = liveTier === 'free' ? 'Free' : 'Pro'
+  const tierColor = liveTier === 'free' ? 'text-[#737373]' : 'text-[#4F4CF0]'
 
   const handleCancel = async () => {
     if (!onCancel || isCancelling) return
     const confirmed = window.confirm('Cancel your Pro subscription? You will keep Pro access until the end of your current billing period.')
     if (!confirmed) return
     setIsCancelling(true)
-    try { await onCancel(); onClose() } finally { setIsCancelling(false) }
+    try { await onCancel(); setLiveTier('pro'); onClose() } finally { setIsCancelling(false) }
+  }
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    setIsLoggingOut(true)
+    try { await onLogout() } catch (error) { console.error('Logout failed:', error); setIsLoggingOut(false) }
   }
 
   return (
@@ -63,12 +88,12 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
         </div>
 
         <div className="py-2">
-          <button onClick={onUpgrade} className={cn('flex items-center justify-between w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium')}>
+          <button onClick={liveTier === 'free' ? onUpgrade : undefined} className={cn('flex items-center justify-between w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', liveTier === 'pro' && 'cursor-default')}>
             <span className="text-[#333333] dark:text-white">Current Plan</span>
             <span className={cn('font-semibold', tierColor)}>{tierLabel}</span>
           </button>
 
-          {tier === 'pro' && onCancel && (
+          {liveTier === 'pro' && onCancel && (
             <button onClick={handleCancel} disabled={isCancelling} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium text-[#FE1212] disabled:opacity-50')}>
               {isCancelling ? 'Cancelling...' : 'Cancel subscription'}
             </button>
@@ -76,7 +101,9 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
 
           <div className="h-px bg-[#E5E5E5] dark:bg-[#2a2a3e] mx-5" />
 
-          <button onClick={onLogout} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', 'text-[#FE1212]')}>Logout</button>
+          <button onClick={handleLogout} disabled={isLoggingOut} className={cn('flex items-center w-full px-5 h-13.5', 'hover:bg-gray-50 dark:hover:bg-white/5', 'transition-colors duration-200', 'font-text text-[14px] font-medium', 'text-[#FE1212] disabled:opacity-50')}>
+            {isLoggingOut ? 'Logging out...' : 'Logout'}
+          </button>
         </div>
       </div>
     </div>
