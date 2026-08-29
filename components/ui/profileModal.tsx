@@ -18,7 +18,7 @@ interface ProfileModalProps {
 }
 
 const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, userEmail, userName, anchorRef }: ProfileModalProps) => {
-  const [position, setPosition] = useState({ top: 0, right: 0 })
+  const [position, setPosition] = useState({ top: 0, right: 12, left: null as number | null })
   const [isCancelling, setIsCancelling] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [liveTier, setLiveTier] = useState<'free' | 'pro'>(tier)
@@ -33,7 +33,14 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
     const updatePosition = () => {
       const rect = anchorRef.current?.getBoundingClientRect()
       if (!rect) return
-      setPosition({ top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) })
+      const modalHeight = 190
+      const openAbove = rect.bottom + modalHeight > window.innerHeight
+      const isLeftAnchored = rect.left < window.innerWidth / 2
+      setPosition({
+        top: openAbove ? Math.max(12, rect.top - modalHeight - 8) : rect.bottom + 8,
+        right: isLeftAnchored ? 12 : Math.max(12, window.innerWidth - rect.right),
+        left: isLeftAnchored ? Math.max(12, rect.left) : null,
+      })
     }
     updatePosition()
     window.addEventListener('resize', updatePosition)
@@ -66,8 +73,7 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
 
   const handleCancel = async () => {
     if (!onCancel || isCancelling) return
-    const confirmed = window.confirm('Cancel your Pro subscription? You will keep Pro access until the end of your current billing period.')
-    if (!confirmed) return
+    if (!window.confirm('Cancel your Pro subscription? You will keep Pro access until the end of your current billing period.')) return
     setIsCancelling(true)
     try { await onCancel(); setLiveTier('pro'); onClose() } finally { setIsCancelling(false) }
   }
@@ -79,7 +85,7 @@ const ProfileModal = ({ isOpen, onClose, tier, onLogout, onUpgrade, onCancel, us
   }
 
   return createPortal(
-    <div ref={modalRef} className="fixed z-[9999] w-70" style={{ top: position.top, right: position.right }}>
+    <div ref={modalRef} className="fixed z-[9999] w-70" style={position.left !== null ? { top: position.top, left: position.left } : { top: position.top, right: position.right }}>
       <div className={cn('bg-white dark:bg-[#1a1a2e] rounded-2xl w-full', 'shadow-[0_8px_16px_-12px_rgba(0,0,0,0.8),0_12px_16px_-12px_rgba(79,76,240,0.64)]', 'relative overflow-hidden', 'border border-[#E5E5E5] dark:border-[#2a2a3e]')}>
         <div className="flex items-center gap-3 px-5 py-4 border-b border-[#E5E5E5] dark:border-[#2a2a3e]">
           <div className="w-10 h-10 rounded-full bg-[#F5F5F5] dark:bg-[#2a2a3e] flex items-center justify-center overflow-hidden"><ProfileIcon className="w-5 h-5 text-[#333333] dark:text-white" /></div>
