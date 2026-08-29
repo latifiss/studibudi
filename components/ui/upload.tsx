@@ -14,6 +14,8 @@ interface UploadProps {
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.ppt,.pptx,.txt,.csv,.xls,.xlsx'
+const UPGRADE_PATH = '/upgrade'
+const FREE_LIMIT_ERRORS = new Set(['FREE_QUIZ_LIMIT_REACHED', 'FREE_UPLOAD_LIMIT_REACHED'])
 
 const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated }: UploadProps) => {
   const [isLoading, setIsLoading] = useState(false)
@@ -21,6 +23,14 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isAlternate = variant === 'alternate'
+
+  const redirectIfLimitReached = (data: any) => {
+    if (FREE_LIMIT_ERRORS.has(String(data?.error || '')) || FREE_LIMIT_ERRORS.has(String(data?.code || ''))) {
+      window.location.assign(UPGRADE_PATH)
+      return true
+    }
+    return false
+  }
 
   const handleFileSelect = async (file: File) => {
     if (file.size > MAX_FILE_SIZE) {
@@ -46,9 +56,11 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       })
 
       const presignData = await presignResponse.json()
-      if (!presignResponse.ok || !presignData.uploadUrl || !presignData.key) {
+      if (!presignResponse.ok) {
+        if (redirectIfLimitReached(presignData)) return
         throw new Error(presignData.message || presignData.error || 'Failed to prepare the file upload.')
       }
+      if (!presignData.uploadUrl || !presignData.key) throw new Error(presignData.message || presignData.error || 'Failed to prepare the file upload.')
 
       key = presignData.key
 
@@ -67,21 +79,21 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       })
 
       const data = await quizResponse.json()
-      if (!quizResponse.ok) throw new Error(data?.message || data?.error || 'Failed to generate quiz.')
+      if (!quizResponse.ok) {
+        if (redirectIfLimitReached(data)) return
+        throw new Error(data?.message || data?.error || 'Failed to generate quiz.')
+      }
       if (!data?.success || !Array.isArray(data.quiz) || !data.quiz.length) throw new Error('The AI did not generate a valid quiz from this file.')
 
       const savedQuizResponse = await fetch('/api/quizzes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: data.title,
-          sourceName: file.name,
-          questions: data.quiz,
-        }),
+        body: JSON.stringify({ title: data.title, sourceName: file.name, questions: data.quiz }),
       })
 
       if (!savedQuizResponse.ok) {
         const savedError = await savedQuizResponse.json().catch(() => null)
+        if (redirectIfLimitReached(savedError)) return
         throw new Error(savedError?.message || savedError?.error || 'Quiz was generated but could not be saved.')
       }
 
@@ -90,7 +102,6 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       localStorage.setItem('currentQuiz', JSON.stringify(currentQuiz))
       localStorage.setItem('currentQuizId', savedQuizData?.quiz?.id ?? '')
       onQuizGenerated?.(currentQuiz)
-
       window.location.href = savedQuizData?.quiz?.id ? `/quiz?historyId=${savedQuizData.quiz.id}` : '/quiz'
     } catch (error) {
       console.error('Upload error:', error)
