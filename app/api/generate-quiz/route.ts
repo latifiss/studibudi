@@ -54,9 +54,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'We could not extract enough readable text from this file. Please upload a text-based document.' }, { status: 400 })
     }
 
-    // Load previously generated questions for this user. This is intentionally
-    // user-wide, so uploading the same document again cannot simply reproduce
-    // questions from an earlier quiz.
     const recentHistory = await prisma.quizHistory.findMany({
       where: { userId: session.user.id },
       orderBy: { createdAt: 'desc' },
@@ -75,21 +72,12 @@ export async function POST(req: NextRequest) {
 
     const quiz = await generateQuizFromText(text, numQuestions, undefined, previousQuestions)
 
-    await prisma.$transaction([
-      prisma.user.update({
-        where: { id: session.user.id },
-        data: { uploadsUsed: { increment: 1 } },
-      }),
-      prisma.quizHistory.create({
-        data: {
-          userId: session.user.id,
-          title: fileName,
-          sourceName: fileName,
-          totalQuestions: quiz.questions.length,
-          questions: quiz.questions,
-        },
-      }),
-    ])
+    // This endpoint generates the quiz only. Quiz history is persisted by
+    // /api/quizzes exactly once, after the client receives the generated quiz.
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { uploadsUsed: { increment: 1 } },
+    })
 
     return NextResponse.json({
       success: true,
