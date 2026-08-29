@@ -54,12 +54,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'We could not extract enough readable text from this file. Please upload a text-based document.' }, { status: 400 })
     }
 
-    const quiz = await generateQuizFromText(text, numQuestions)
-
-    await prisma.user.update({
-      where: { id: session.user.id },
-      data: { uploadsUsed: { increment: 1 } },
+    // Load previously generated questions for this user. This is intentionally
+    // user-wide, so uploading the same document again cannot simply reproduce
+    // questions from an earlier quiz.
+    const recentHistory = await prisma.quizHistory.findMany({
+      where: { userId: session.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      select: { questions: true },
     })
+
+    const previousQuestions = recentHistory.flatMap((history) => {
+      if (!Array.isArray(history.questions)) return []
+      return history.questions.flatMap((question: unknown) => {
+        if (!question || typeof question !== 'object') return []
+        const value = question as { question?: unknown }
+        return typeof value.question === 'string' ? [value.question] : []
+      })
+    }).slice(0, 100)
+
+    const quiz = await generateQuizFromText(text, numQuestions, undefined, previousQuestions)
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: session.user.id },
+        data: { uploadsUsed: { increment: 1 } },
+      }),
+      prisma.quizHistory.create({
+        data: {
+          userId: session.user.id,
+          title: fileName,
+          sourceName: fileName,
+          totalQuestions: quiz.questions.length,
+          questions: quiz.questions,
+        },
+      }),
+    ])
 
     return NextResponse.json({
       success: true,
