@@ -4,6 +4,15 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+
+  // Keep native Node packages out of Turbopack's ESM bundle.
+  // @napi-rs/canvas contains native bindings that must be loaded by Node
+  // at runtime, not bundled as an ESM asset by Next.js.
+  serverExternalPackages: [
+    '@napi-rs/canvas',
+    'pdfjs-dist',
+  ],
+
   images: {
     remotePatterns: [
       { protocol: 'https', hostname: '**' },
@@ -13,9 +22,11 @@ const nextConfig: NextConfig = {
     ],
     unoptimized: true,
   },
+
   turbopack: {
     root: __dirname,
   },
+
   async headers() {
     return [
       {
