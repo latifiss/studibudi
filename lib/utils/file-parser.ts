@@ -1,60 +1,48 @@
-// lib/utils/file-parser.ts
+import * as XLSX from 'xlsx'
 
-/**
- * Extracts text content from uploaded files
- * Supports: PDF, DOC, DOCX, PPT, PPTX, TXT
- */
+export type ParsedFile = {
+  text: string
+  fileType: string
+}
 
 export async function extractTextFromFile(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer()
-  const fileType = file.type
-  const fileName = file.name.toLowerCase()
-  const ext = fileName.split('.').pop() || ''
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  return extractTextFromBytes(bytes, file.name, file.type)
+}
 
-  // Check if it's a DOCX file (even if MIME type is wrong)
-  const isDocx = ext === 'docx' || fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-  const isDoc = ext === 'doc' || fileType === 'application/msword'
-  const isPdf = ext === 'pdf' || fileType === 'application/pdf'
-  const isPptx = ext === 'pptx' || fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-  const isPpt = ext === 'ppt' || fileType === 'application/vnd.ms-powerpoint'
-  const isTxt = ext === 'txt' || fileType === 'text/plain'
+export async function extractTextFromBytes(
+  bytes: Uint8Array,
+  fileName: string,
+  mimeType = ''
+): Promise<string> {
+  const extension = fileName.split('.').pop()?.toLowerCase() || ''
 
-  try {
-    // Text files
-    if (isTxt) {
-      return extractTextFromTXT(buffer)
-    }
+  switch (extension) {
+    case 'txt':
+    case 'csv':
+      return new TextDecoder('utf-8').decode(bytes).trim()
 
-    // PDF files
-    if (isPdf) {
-      return await extractTextFromPDF(buffer)
-    }
+    case 'pdf':
+      return extractTextFromPDF(bytes)
 
-    // DOCX files
-    if (isDocx) {
-      return await extractTextFromDOCX(buffer)
-    }
+    case 'docx':
+      return extractTextFromDOCX(bytes)
 
-    // DOC files
-    if (isDoc) {
-      return await extractTextFromDOC(buffer)
-    }
+    case 'xlsx':
+    case 'xls':
+      return extractTextFromSpreadsheet(bytes)
 
-    // PPTX files
-    if (isPptx) {
-      return await extractTextFromPPTX(buffer)
-    }
+    case 'pptx':
+      return extractTextFromPPTX(bytes)
 
-    // PPT files
-    if (isPpt) {
-      return await extractTextFromPPT(buffer)
-    }
+    case 'doc':
+      throw new Error('Legacy .doc files are not supported yet. Please save the document as .docx or PDF and upload it again.')
 
-    throw new Error(`Unsupported file type: ${fileType || ext}`)
-  } catch (error) {
-    console.error(`Error parsing ${ext || fileType}:`, error)
-    // Return a helpful error message with suggestions
-    return getFallbackMessage(ext, fileType)
+    case 'ppt':
+      throw new Error('Legacy .ppt files are not supported yet. Please save the presentation as .pptx or PDF and upload it again.')
+
+    default:
+      throw new Error(`Unsupported file type: ${mimeType || extension || 'unknown'}`)
   }
 }
 
@@ -71,7 +59,7 @@ function extractTextFromTXT(buffer: ArrayBuffer): string {
 async function extractTextFromPDF(buffer: ArrayBuffer): Promise<string> {
   try {
     // Dynamic import to avoid issues if pdf-parse is not installed
-    const pdfParse = await import('pdf-parse/lib/pdf-parse')
+    const pdfParse = await import('pdf-parse')
     const data = await pdfParse.default(Buffer.from(buffer))
     return data.text
   } catch (error) {
@@ -161,32 +149,35 @@ async function extractTextFromPPTX(buffer: ArrayBuffer): Promise<string> {
         return extracted
       }
     }
-    throw new Error('No text content found in PPTX')
-  } catch (error) {
-    console.error('PPTX parsing error:', error)
-    return 'PPTX files are not fully supported. Please convert to PDF or TXT for best results.'
-  }
-}
 
-/**
- * Extract text from PPT files (older PowerPoint format)
- */
-async function extractTextFromPPT(buffer: ArrayBuffer): Promise<string> {
-  // PPT files are OLE compound documents, very difficult to parse
-  return 'PPT files are not supported. Please convert to PDF, PPTX, or TXT for best results.'
-}
+    if (end < 0) throw new Error('Invalid ZIP archive.')
 
-/**
- * Get a fallback error message for unsupported files
- */
-function getFallbackMessage(ext: string, fileType: string): string {
-  const messages: Record<string, string> = {
-    'docx': 'DOCX parsing failed. Please try converting to PDF or TXT.',
-    'doc': 'DOC files are not fully supported. Please convert to DOCX, PDF, or TXT.',
-    'pptx': 'PPTX files are not fully supported. Please convert to PDF or TXT.',
-    'ppt': 'PPT files are not supported. Please convert to PDF, PPTX, or TXT.',
-    'pdf': 'PDF parsing failed. Please ensure the file is not password protected.',
-    'txt': 'Text file parsing failed.',
+    const centralDirectorySize = view.getUint32(end + 12, true)
+    const centralDirectoryOffset = view.getUint32(end + 16, true)
+    let offset = centralDirectoryOffset
+    const endOffset = centralDirectoryOffset + centralDirectorySize
+
+    while (offset < endOffset) {
+      if (view.getUint32(offset, true) !== 0x02014b50) throw new Error('Invalid ZIP central directory.')
+
+      const method = view.getUint16(offset + 10, true)
+      const compressedSize = view.getUint32(offset + 20, true)
+      const uncompressedSize = view.getUint32(offset + 24, true)
+      const nameLength = view.getUint16(offset + 28, true)
+      const extraLength = view.getUint16(offset + 30, true)
+      const commentLength = view.getUint16(offset + 32, true)
+      const localOffset = view.getUint32(offset + 42, true)
+      const nameStart = offset + 46
+      const name = new TextDecoder('utf-8').decode(this.bytes.slice(nameStart, nameStart + nameLength))
+
+      this.entries.set(name, {
+        method,
+        compressedSize,
+        uncompressedSize,
+        offset: localOffset,
+      })
+
+      offset += 46 + nameLength + extraLength + commentLength
+    }
   }
-  return messages[ext] || messages[fileType] || 'File parsing failed. Please try uploading a different file format (PDF or TXT recommended).'
 }
