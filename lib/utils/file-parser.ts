@@ -83,27 +83,30 @@ function extractTextFromPlainText(bytes: Uint8Array): string {
 /**
  * PDF
  *
- * Uses pdf-parse v2's Node entry point. This is important on Vercel because
- * the browser PDF.js entry can attempt to load pdf.worker.mjs and fail with
- * "Setting up fake worker failed".
+ * Uses pdf-parse 1.x, which is the stable Node-oriented implementation for
+ * this project. Do NOT use pdf-parse/node (v2) or pdfjs-dist directly here.
  *
- * The uploaded bytes are passed directly to PDFParse. No filesystem path is
- * used, so the server never tries to access test/data or another local file.
+ * The PDF is passed as an in-memory Buffer. No filesystem path is used and
+ * no browser PDF worker is required, which avoids Vercel errors such as:
+ *   - DOMMatrix is not defined
+ *   - Setting up fake worker failed
+ *   - Cannot find pdf.worker.mjs
  */
 async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
-  let parser: {
-    getText: () => Promise<{ text?: string }>
-    destroy: () => Promise<void>
-  } | null = null
-
   try {
-    const { PDFParse } = await import('pdf-parse/node')
+    const pdfParseModule = await import('pdf-parse')
 
-    parser = new PDFParse({
-      data: Buffer.from(bytes),
-    })
+    const pdfParse =
+      (pdfParseModule as unknown as {
+        default?: (data: Buffer) => Promise<{ text?: string }>
+      }).default ||
+      (pdfParseModule as unknown as ((data: Buffer) => Promise<{ text?: string }>))
 
-    const result = await parser.getText()
+    if (typeof pdfParse !== 'function') {
+      throw new Error('PDF parser could not be loaded.')
+    }
+
+    const result = await pdfParse(Buffer.from(bytes))
     const text = normalizeText(result?.text || '')
 
     if (!text) {
@@ -123,14 +126,6 @@ async function extractTextFromPDF(bytes: Uint8Array): Promise<string> {
     throw new Error(
       'Failed to parse PDF. Please ensure the file is a valid, text-based PDF.'
     )
-  } finally {
-    if (parser) {
-      try {
-        await parser.destroy()
-      } catch (destroyError) {
-        console.warn('Failed to destroy PDF parser:', destroyError)
-      }
-    }
   }
 }
 
