@@ -49,43 +49,24 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
 
     try {
       const presignResponse = await fetch('/api/uploads/presign', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fileName: file.name, fileSize: file.size, contentType: file.type || 'application/octet-stream' }),
       })
       const presignData = await presignResponse.json()
-      if (!presignResponse.ok) {
-        if (redirectIfLimitReached(presignData)) return
-        throw new Error(presignData.message || presignData.error || 'Failed to prepare the file upload.')
-      }
+      if (!presignResponse.ok) { if (redirectIfLimitReached(presignData)) return; throw new Error(presignData.message || presignData.error || 'Failed to prepare the file upload.') }
       if (!presignData.uploadUrl || !presignData.key) throw new Error(presignData.message || presignData.error || 'Failed to prepare the file upload.')
       key = presignData.key
 
       const uploadResponse = await fetch(presignData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
       if (!uploadResponse.ok) throw new Error('Failed to upload the file to secure storage.')
 
-      const quizResponse = await fetch('/api/generate-quiz', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, fileName: file.name, numQuestions: 5 }),
-      })
+      const quizResponse = await fetch('/api/generate-quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, fileName: file.name, numQuestions: 5 }) })
       const data = await quizResponse.json()
-      if (!quizResponse.ok) {
-        if (redirectIfLimitReached(data)) return
-        throw new Error(data?.message || data?.error || 'Failed to generate quiz.')
-      }
+      if (!quizResponse.ok) { if (redirectIfLimitReached(data)) return; throw new Error(data?.message || data?.error || 'Failed to generate quiz.') }
       if (!data?.success || !Array.isArray(data.quiz) || !data.quiz.length) throw new Error('The AI did not generate a valid quiz from this file.')
 
-      const savedQuizResponse = await fetch('/api/quizzes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: data.title, sourceName: file.name, questions: data.quiz }),
-      })
-      if (!savedQuizResponse.ok) {
-        const savedError = await savedQuizResponse.json().catch(() => null)
-        if (redirectIfLimitReached(savedError)) return
-        throw new Error(savedError?.message || savedError?.error || 'Quiz was generated but could not be saved.')
-      }
+      const savedQuizResponse = await fetch('/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: data.title, sourceName: file.name, questions: data.quiz }) })
+      if (!savedQuizResponse.ok) { const savedError = await savedQuizResponse.json().catch(() => null); if (redirectIfLimitReached(savedError)) return; throw new Error(savedError?.message || savedError?.error || 'Quiz was generated but could not be saved.') }
 
       const savedQuizData = await savedQuizResponse.json()
       localStorage.setItem('currentQuiz', JSON.stringify(data.quiz))
@@ -99,22 +80,20 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
     }
   }
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (file) handleFileSelect(file)
-    if (fileInputRef.current) fileInputRef.current.value = ''
-  }
-
-  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
-    event.preventDefault(); setIsDragging(false)
-    const file = event.dataTransfer.files?.[0]
-    if (file) handleFileSelect(file)
-  }
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) handleFileSelect(file); if (fileInputRef.current) fileInputRef.current.value = '' }
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => { event.preventDefault(); setIsDragging(false); const file = event.dataTransfer.files?.[0]; if (file) handleFileSelect(file) }
 
   return (
     <>
       {isLoading && <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white"><Loader onComplete={() => {}} /></div>}
-      <div className={cn('flex flex-col items-start p-4 sm:p-6 lg:p-6 bg-white rounded-3xl relative', isAlternate ? 'w-full max-w-[961px] h-[349px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[231px] sm:h-[279px] lg:h-[612px]', 'shadow-[0px_0px_1px_rgba(0,0,0,0.05),0px_3.2px_89.6px_-25.6px_rgba(0,0,0,0.1),0px_6.4px_102.4px_-38.4px_rgba(0,0,0,0.2),0px_12.8px_64px_-38.4px_rgba(0,0,0,0.3),0px_19.2px_76.8px_-51.2px_rgba(0,0,0,0.4),0px_25.6px_89.6px_-64px_rgba(0,0,0,0.5)', 'after:absolute after:inset-0 after:rounded-3xl after:pointer-events-none after:bg-white/0.002 z-0', isDragging && 'ring-2 ring-[#4F4CF0] ring-offset-2', className)} onDrop={handleDrop} onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }} onDragLeave={(event) => { event.preventDefault(); setIsDragging(false) }}>
+      <div className={cn(
+        'flex flex-col items-start p-4 sm:p-6 lg:p-6 bg-white relative',
+        'rounded-lg',
+        isAlternate ? 'w-full max-w-[961px] h-[261.75px] lg:h-[261.75px]' : 'w-full max-w-[322px] sm:max-w-[500px] lg:max-w-[400px] h-[231px] sm:h-[279px] lg:h-[612px]',
+        'shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)]',
+        'border border-[#D9D9D9]',
+        isDragging && 'ring-2 ring-[#4F4CF0] ring-offset-2', className
+      )} onDrop={handleDrop} onDragOver={(event) => { event.preventDefault(); setIsDragging(true) }} onDragLeave={(event) => { event.preventDefault(); setIsDragging(false) }}>
         <input ref={fileInputRef} type="file" accept={ACCEPTED_FILE_TYPES} className="hidden" onChange={handleFileChange} />
         <div className="flex flex-col justify-center items-center w-full h-full z-10 p-4 sm:p-6" style={{ backgroundImage: `url("data:image/svg+xml,%3csvg width='100%25' height='100%25' xmlns='http://www.w3.org/2000/svg'%3e%3crect width='100%25' height='100%25' fill='none' stroke='%23737373' stroke-width='1.5' stroke-dasharray='8 8' stroke-dashoffset='0' stroke-linecap='square' rx='12'/%3e%3c/svg%3e")` }}>
           <div className={cn('flex flex-col items-center justify-center w-full h-full', isAlternate ? 'max-w-[320px]' : 'max-w-[189.98px] sm:max-w-[320px] lg:max-w-[320px]')}>
