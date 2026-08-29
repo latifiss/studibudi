@@ -102,23 +102,30 @@ async function extractTextFromPDF(
   bytes: Uint8Array
 ): Promise<string> {
   try {
-    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const pdfjs = await import(
+      'pdfjs-dist/legacy/build/pdf.mjs'
+    )
 
     const loadingTask = pdfjs.getDocument({
       data: bytes,
-      useWorkerFetch: false,
+      disableFontFace: true,
+      useSystemFonts: false,
       isEvalSupported: false,
-      useSystemFonts: true,
     })
 
     const pdf = await loadingTask.promise
 
     const pages: string[] = []
 
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+    for (
+      let pageNumber = 1;
+      pageNumber <= pdf.numPages;
+      pageNumber++
+    ) {
       const page = await pdf.getPage(pageNumber)
 
-      const content = await page.getTextContent()
+      const content =
+        await page.getTextContent()
 
       const pageText = content.items
         .map((item) => {
@@ -134,39 +141,36 @@ async function extractTextFromPDF(
         })
         .join(' ')
 
-      const normalizedPage = normalizeText(pageText)
-
-      if (normalizedPage) {
+      if (pageText.trim()) {
         pages.push(
-          `Page ${pageNumber}\n${normalizedPage}`
+          `Page ${pageNumber}\n${pageText.trim()}`
         )
       }
 
       page.cleanup()
     }
 
-    const text = normalizeText(
-      pages.join('\n\n')
-    )
+    const text = pages.join('\n\n').trim()
 
     if (!text) {
       throw new Error(
-        'No readable text was found in this PDF. The PDF may contain scanned images rather than selectable text.'
+        'No readable text was found in this PDF. The PDF may be scanned or contain only images.'
       )
     }
 
     return text
   } catch (error) {
-    console.error('PDF parsing error:', error)
-
-    if (error instanceof Error) {
-      throw new Error(
-        `Failed to parse PDF: ${error.message}`
-      )
-    }
+    console.error(
+      'PDF parsing error:',
+      error
+    )
 
     throw new Error(
-      'Failed to parse PDF file. Please make sure the file is not corrupted or password protected.'
+      `Failed to parse PDF: ${
+        error instanceof Error
+          ? error.message
+          : 'Unknown PDF parsing error'
+      }`
     )
   }
 }
