@@ -18,7 +18,7 @@ const UpgradePage = () => {
     return (
       <div className="h-dvh min-h-0 w-full overflow-hidden flex items-center justify-center bg-[#000437]">
         <p className="font-text font-semibold text-lg text-white">
-          Loading...
+          😅 Getting your pricing in a second...
         </p>
       </div>
     )
