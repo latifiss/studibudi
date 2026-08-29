@@ -30,6 +30,25 @@ export default function PaddleUpgradeButton({
           ? "production"
           : "sandbox",
       token,
+      eventCallback: (event) => {
+        if (event.name !== "checkout.completed") return;
+
+        const transactionId = event.data?.transaction_id;
+        if (!transactionId) return;
+
+        // The webhook is still the authoritative provisioning mechanism, but
+        // sandbox checkouts can redirect before the webhook has reached us.
+        // Sync the completed transaction immediately so the user's PRO access
+        // is available as soon as payment succeeds.
+        fetch(`/api/billing/sync?transactionId=${encodeURIComponent(transactionId)}`, {
+          credentials: "include",
+          cache: "no-store",
+        })
+          .catch((error) => console.error("Paddle sync failed:", error))
+          .finally(() => {
+            window.location.assign(`/dashboard?payment=success&transactionId=${encodeURIComponent(transactionId)}`);
+          });
+      },
     }).then((instance) => {
       setPaddle(instance);
       setLoading(false);
@@ -40,11 +59,6 @@ export default function PaddleUpgradeButton({
     const priceId = process.env.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID;
     if (!paddle || !priceId) return;
 
-    // Paddle's success URL sends the customer back into the authenticated app.
-    // The dashboard then refreshes entitlements so the new PRO subscription is
-    // reflected everywhere as soon as Paddle's webhook has reached our backend.
-    const successUrl = `${window.location.origin}/dashboard?payment=success`;
-
     paddle.Checkout.open({
       items: [{ priceId, quantity: 1 }],
       customData: { userId },
@@ -52,7 +66,9 @@ export default function PaddleUpgradeButton({
         displayMode: "overlay",
         theme: "light",
         variant: "one-page",
-        successUrl,
+        // Fallback in case Paddle doesn't emit the client event before the
+        // redirect. The dashboard will continue checking entitlements.
+        successUrl: `${window.location.origin}/dashboard?payment=success`,
       },
     });
   };
