@@ -70,53 +70,127 @@ const buildStudyContext = (text: string, maxCharacters = 50000) => {
   return selected.join('\n\n')
 }
 
-const validateQuiz = (value: unknown, expectedQuestions: number): GeneratedQuiz => {
+const normalizeQuestion = (question: any, index: number): Question => ({
+  id: String(question?.id || index + 1),
+  question: String(question?.question || '').trim(),
+  options: Array.isArray(question?.options)
+    ? question.options.slice(0, 4).map((option: any) => ({
+        id: String(option?.id || '').trim().toUpperCase(),
+        label: String(option?.label || '').trim(),
+      }))
+    : [],
+  correctAnswer: String(question?.correctAnswer || '').trim().toUpperCase(),
+  explanation: String(question?.explanation || '').trim(),
+  sourceReference: String(question?.sourceReference || '').trim(),
+})
+
+const isValidQuestion = (question: Question): boolean =>
+  question.question.length >= 10 &&
+  question.options.length === 4 &&
+  ['A', 'B', 'C', 'D'].every((id) => question.options.some((option) => option.id === id && option.label)) &&
+  ['A', 'B', 'C', 'D'].includes(question.correctAnswer) &&
+  question.options.some((option) => option.id === question.correctAnswer) &&
+  Boolean(question.explanation)
+
+const validateQuiz = (value: unknown, minimumQuestions: number): GeneratedQuiz => {
   if (!value || typeof value !== 'object' || !Array.isArray((value as GeneratedQuiz).questions)) {
     throw new Error('The AI returned an invalid quiz structure.')
   }
-  const questions = (value as GeneratedQuiz).questions.slice(0, expectedQuestions).map((question, index) => ({
-    id: String(question.id || index + 1),
-    question: String(question.question || '').trim(),
-    options: Array.isArray(question.options) ? question.options.slice(0, 4).map((option) => ({ id: String(option?.id || '').trim().toUpperCase(), label: String(option?.label || '').trim() })) : [],
-    correctAnswer: String(question.correctAnswer || '').trim().toUpperCase(),
-    explanation: String(question.explanation || '').trim(),
-    sourceReference: String(question.sourceReference || '').trim(),
-  }))
-  if (questions.length !== expectedQuestions || questions.some((question) => question.question.length < 10 || question.options.length !== 4 || question.options.some((option) => !option.id || !option.label) || !['A', 'B', 'C', 'D'].every((id) => question.options.some((option) => option.id === id)) || !question.options.some((option) => option.id === question.correctAnswer) || !question.explanation)) {
+
+  const questions = (value as GeneratedQuiz).questions.map(normalizeQuestion).filter(isValidQuestion)
+
+  if (questions.length < minimumQuestions) {
     throw new Error('The AI returned incomplete quiz questions. Please try again.')
   }
+
   return { questions }
 }
 
+const secureShuffle = <T,>(items: T[]): T[] => {
+  const result = [...items]
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1)
+    ;[result[i], result[j]] = [result[j], result[i]]
+  }
+  return result
+}
+
+const randomizeQuestion = (question: Question, index: number): Question => {
+  const shuffled = secureShuffle(question.options)
+  const optionIds = ['A', 'B', 'C', 'D']
+  const correctLabel = question.options.find((option) => option.id === question.correctAnswer)?.label
+
+  if (!correctLabel) {
+    return { ...question, id: String(index + 1) }
+  }
+
+  const options = shuffled.map((option, optionIndex) => ({
+    id: optionIds[optionIndex],
+    label: option.label,
+  }))
+
+  const correctIndex = options.findIndex((option) => option.label === correctLabel)
+
+  return {
+    ...question,
+    id: String(index + 1),
+    options,
+    correctAnswer: optionIds[correctIndex],
+  }
+}
+
+const createFreshQuiz = (pool: Question[], numQuestions: number): GeneratedQuiz => {
+  const unique = new Map<string, Question>()
+
+  for (const question of secureShuffle(pool)) {
+    const key = question.question.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    if (!unique.has(key)) unique.set(key, question)
+  }
+
+  const selected = secureShuffle([...unique.values()]).slice(0, numQuestions)
+
+  return {
+    questions: selected.map((question, index) => randomizeQuestion(question, index)),
+  }
+}
+
 export async function generateQuizWithOpenRouter(text: string, numQuestions = 5, model = OPENROUTER_MODEL): Promise<GeneratedQuiz> {
-  if (!OPENROUTER_API_KEY) throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OpenRouter API key is missing. Add OPENROUTER_API_KEY to your environment variables.')
+  }
 
   const documentText = buildStudyContext(text)
   const generationId = crypto.randomUUID()
+  const documentFingerprint = crypto.createHash('sha256').update(documentText).digest('hex').slice(0, 16)
+  const poolSize = Math.max(numQuestions * 3, 12)
 
-  const prompt = `Create a NEW study quiz using ONLY the uploaded document below.
+  const prompt = `Generate a fresh question pool for a study quiz using ONLY the uploaded document.
 
-This is a fresh quiz-generation request. Generation ID: ${generationId}
+REQUEST ID: ${generationId}
+DOCUMENT INSTANCE: ${documentFingerprint}
 
-IMPORTANT VARIATION RULES:
-- Never reuse, recall, or reproduce a previous quiz.
-- The same document may be uploaded multiple times and must produce a different quiz each time.
-- Choose a different combination of concepts, facts, details, and question wording for every generation.
-- Vary which parts of the document are tested and vary the correct-option positions.
-- Do not let the generation ID, previous quizzes, or external knowledge influence the factual content of questions; it exists only to make this request unique.
+Generate exactly ${poolSize} substantially different questions. The application will randomly choose ${numQuestions} questions from this pool after you respond.
 
-Rules:
-- Every question must be answerable from the document.
-- Do not use general knowledge or information not present in the document.
-- Create exactly ${numQuestions} multiple-choice questions.
-- Every question must have exactly four options with IDs A, B, C, D.
+FRESHNESS IS REQUIRED:
+- This is a new quiz request, even if the same document was uploaded before.
+- Do not produce a fixed or memorized set of questions.
+- Do not focus only on the first or most obvious facts in the document.
+- Cover different sections, concepts, facts, relationships, comparisons, details, and applications when supported.
+- Use varied question wording and varied correct-answer positions.
+- Do not repeat a question or create near-duplicate questions.
+- The request ID and document instance are only uniqueness markers. Never ask questions about them.
+
+GROUNDING:
+- Use ONLY information contained in the uploaded document.
+- Do not use outside knowledge.
+- Every question must be answerable directly from the document.
+- Every question must have exactly four options: A, B, C, D.
 - Exactly one option must be correct.
-- Questions should cover different parts of the document where possible.
-- Explanations must explain the answer using facts from the document.
-- sourceReference must identify the supporting passage in a short quote or precise description, maximum 220 characters.
-- Never invent citations, page numbers, facts, names, dates, or statistics.
+- Explanations must be supported by the document.
+- sourceReference must be a short quote or precise description of the supporting passage, maximum 220 characters.
+- Do not invent page numbers, citations, facts, names, dates, or statistics.
 
-Return JSON only in this exact shape:
+Return JSON only in this shape:
 {
   "questions": [
     {
@@ -146,24 +220,32 @@ END DOCUMENT`
       'HTTP-Referer': OPENROUTER_SITE_URL,
       'X-Title': OPENROUTER_SITE_NAME,
       'Content-Type': 'application/json',
-      'Cache-Control': 'no-cache',
+      'Cache-Control': 'no-cache, no-store, max-age=0',
       Pragma: 'no-cache',
     },
     data: {
       model,
       messages: [
-        { role: 'system', content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Never invent information outside the supplied document. Every generation request must create a fresh quiz rather than reusing a previous quiz.' },
+        {
+          role: 'system',
+          content: 'You are a strict document-grounded quiz generator. Return valid JSON only. Generate a diverse question pool for every request. Never reuse a fixed quiz. Use only the supplied document.',
+        },
         { role: 'user', content: prompt },
       ],
-      temperature: 0.8,
-      max_tokens: 5000,
+      temperature: 1,
+      top_p: 0.95,
+      frequency_penalty: 0.35,
+      presence_penalty: 0.25,
+      max_tokens: Math.max(7000, poolSize * 650),
       response_format: { type: 'json_object' },
     },
   })
 
   const content = response.data.choices?.[0]?.message?.content
   if (!content) throw new Error('No content received from AI.')
-  return validateQuiz(JSON.parse(content), numQuestions)
+
+  const pool = validateQuiz(JSON.parse(content), numQuestions).questions
+  return createFreshQuiz(pool, numQuestions)
 }
 
 export async function generateQuizFromText(text: string, numQuestions = 5, model?: string): Promise<GeneratedQuiz> {
