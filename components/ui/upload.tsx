@@ -49,7 +49,9 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
 
     try {
       const presignResponse = await fetch('/api/uploads/presign', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
         body: JSON.stringify({ fileName: file.name, fileSize: file.size, contentType: file.type || 'application/octet-stream' }),
       })
       const presignData = await presignResponse.json()
@@ -60,19 +62,35 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       const uploadResponse = await fetch(presignData.uploadUrl, { method: 'PUT', headers: { 'Content-Type': file.type || 'application/octet-stream' }, body: file })
       if (!uploadResponse.ok) throw new Error('Failed to upload the file to secure storage.')
 
-      const quizResponse = await fetch('/api/generate-quiz', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, fileName: file.name, numQuestions: 5 }) })
+      const generationId = `${Date.now()}-${crypto.randomUUID()}`
+      const quizResponse = await fetch('/api/generate-quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ key, fileName: file.name, numQuestions: 5, generationId }),
+      })
       const data = await quizResponse.json()
       if (!quizResponse.ok) { if (redirectIfLimitReached(data)) return; throw new Error(data?.message || data?.error || 'Failed to generate quiz.') }
       if (!data?.success || !Array.isArray(data.quiz) || !data.quiz.length) throw new Error('The AI did not generate a valid quiz from this file.')
 
-      const savedQuizResponse = await fetch('/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: data.title, sourceName: file.name, questions: data.quiz }) })
+      const savedQuizResponse = await fetch('/api/quizzes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        body: JSON.stringify({ title: data.title, sourceName: file.name, questions: data.quiz }),
+      })
       if (!savedQuizResponse.ok) { const savedError = await savedQuizResponse.json().catch(() => null); if (redirectIfLimitReached(savedError)) return; throw new Error(savedError?.message || savedError?.error || 'Quiz was generated but could not be saved.') }
 
       const savedQuizData = await savedQuizResponse.json()
+      const quizId = savedQuizData?.quiz?.id
+      if (!quizId) throw new Error('Quiz was generated but no quiz id was returned.')
+
+      // Keep the latest quiz available for the fallback /quiz route, but always
+      // navigate using the newly-created history id so an older quiz can never win.
       localStorage.setItem('currentQuiz', JSON.stringify(data.quiz))
-      localStorage.setItem('currentQuizId', savedQuizData?.quiz?.id ?? '')
+      localStorage.setItem('currentQuizId', quizId)
       onQuizGenerated?.(data.quiz)
-      window.location.href = savedQuizData?.quiz?.id ? `/quiz?historyId=${savedQuizData.quiz.id}` : '/quiz'
+      window.location.replace(`/quiz?historyId=${encodeURIComponent(quizId)}&generation=${encodeURIComponent(generationId)}`)
     } catch (error) {
       console.error('Upload error:', error)
       setError(error instanceof Error ? error.message : 'Failed to process file.')
