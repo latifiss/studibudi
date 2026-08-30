@@ -25,10 +25,10 @@ const Footer = ({ className }: FooterProps) => {
 
         <div className="hidden sm:flex flex-col items-center gap-3">
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            {['Terms and conditions', 'Privacy Policy', 'Security'].map((item) => (
+            {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy']].map(([item, href]) => (
               <Link
                 key={item}
-                href="#"
+                href={href}
                 className="font-text text-[14px] leading-5 font-medium text-[#333333] hover:opacity-70 transition-opacity"
               >
                 {item}
@@ -36,10 +36,10 @@ const Footer = ({ className }: FooterProps) => {
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            {['Contact Us', 'Support', 'Cookie Policy', 'Release Notes'].map((item) => (
+            {[['Contact Us', '#'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
               <Link
                 key={item}
-                href="#"
+                href={href}
                 className="font-text text-[14px] leading-5 font-medium text-[#333333] hover:opacity-70 transition-opacity"
               >
                 {item}
@@ -76,10 +76,10 @@ const Footer = ({ className }: FooterProps) => {
 
       <div className="flex flex-col items-center gap-3 mt-6 sm:hidden">
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {['Terms and conditions', 'Privacy Policy', 'Security'].map((item) => (
+          {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy']].map(([item, href]) => (
             <Link
               key={item}
-              href="#"
+              href={href}
               className="font-text text-[14px] leading-5 font-medium text-[#333333] hover:opacity-70 transition-opacity"
             >
               {item}
@@ -87,10 +87,10 @@ const Footer = ({ className }: FooterProps) => {
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {['Contact Us', 'Support', 'Cookie Policy', 'Release Notes'].map((item) => (
+          {[['Contact Us', '#'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
             <Link
               key={item}
-              href="#"
+              href={href}
               className="font-text text-[14px] leading-5 font-medium text-[#333333] hover:opacity-70 transition-opacity"
             >
               {item}
