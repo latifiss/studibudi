@@ -1,7 +1,7 @@
 import posthog from 'posthog-js'
 
-const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY
-const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com'
+const apiKey = process.env.POSTHOG_KEY
+const apiHost = process.env.POSTHOG_HOST || 'https://us.i.posthog.com'
 
 let initialized = false
 
