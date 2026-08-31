@@ -12,7 +12,7 @@ export default function PostHogProvider({
   const { user } = useUser()
 
   useEffect(() => {
-    initPostHog()
+    void initPostHog()
   }, [])
 
   useEffect(() => {
