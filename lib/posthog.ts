@@ -1,26 +1,39 @@
 import posthog from 'posthog-js'
 
-const apiKey = process.env.POSTHOG_KEY
-const apiHost = process.env.POSTHOG_HOST || 'https://us.i.posthog.com'
-
 let initialized = false
+let initializing: Promise<void> | null = null
 
-export function initPostHog() {
-  if (initialized || !apiKey || typeof window === 'undefined') return
+export async function initPostHog() {
+  if (initialized || typeof window === 'undefined') return
+  if (initializing) return initializing
 
-  posthog.init(apiKey, {
-    api_host: apiHost,
-    capture_pageview: true,
-    capture_pageleave: true,
-    autocapture: true,
-    session_recording: {
-      maskAllInputs: true,
-      maskTextSelector: '[data-ph-mask]',
-    },
-    persistence: 'localStorage+cookie',
-  })
+  initializing = fetch('/api/posthog-config', { cache: 'no-store' })
+    .then(async (response) => {
+      if (!response.ok) return
 
-  initialized = true
+      const { key, host } = await response.json()
+      if (!key) return
+
+      posthog.init(key, {
+        api_host: host || 'https://us.i.posthog.com',
+        capture_pageview: true,
+        capture_pageleave: true,
+        autocapture: true,
+        session_recording: {
+          maskAllInputs: true,
+          maskTextSelector: '[data-ph-mask]',
+        },
+        persistence: 'localStorage+cookie',
+      })
+
+      initialized = true
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      initializing = null
+    })
+
+  return initializing
 }
 
 export function identifyPostHog(userId: string, properties?: Record<string, unknown>) {
