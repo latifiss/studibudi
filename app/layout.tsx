@@ -18,7 +18,7 @@ const youngSerif = Young_Serif({
   display: "swap",
 });
 
-const siteUrl = "https://studibudi.vercel.app";
+const siteUrl = "https://stidibudi.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
