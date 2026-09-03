@@ -23,14 +23,14 @@ const siteUrl = "https://stidibudi.com";
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Studibudi — Turn Your Study Material Into Interactive Quizzes",
-    template: "%s | Studibudi",
+    default: "Stidibudi — Turn Your Study Material Into Interactive Quizzes",
+    template: "%s | Stidibudi",
   },
   description:
-    "Studibudi turns your study materials into engaging AI-powered quizzes. Upload your files, test your knowledge, and learn in a more interactive way.",
-  applicationName: "Studibudi",
+    "Stidibudi turns your study materials into engaging AI-powered quizzes. Upload your files, test your knowledge, and learn in a more interactive way.",
+  applicationName: "Stidibudi",
   keywords: [
-    "Studibudi",
+    "Stidibudi",
     "AI quiz generator",
     "study quiz",
     "quiz generator",
@@ -39,24 +39,24 @@ export const metadata: Metadata = {
     "interactive quizzes",
     "study material",
   ],
-  authors: [{ name: "Studibudi" }],
-  creator: "Studibudi",
-  publisher: "Studibudi",
+  authors: [{ name: "Stidibudi" }],
+  creator: "Stidibudi",
+  publisher: "Stidibudi",
   alternates: { canonical: "/" },
   openGraph: {
     type: "website",
     url: siteUrl,
-    siteName: "Studibudi",
-    title: "Studibudi — Turn Your Study Material Into Interactive Quizzes",
+    siteName: "Stidibudi",
+    title: "Stidibudi — Turn Your Study Material Into Interactive Quizzes",
     description:
-      "Turn your study materials into engaging AI-powered quizzes with Studibudi.",
+      "Turn your study materials into engaging AI-powered quizzes with Stidibudi.",
     locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: "Studibudi — Turn Your Study Material Into Interactive Quizzes",
+    title: "Stidibudi — Turn Your Study Material Into Interactive Quizzes",
     description:
-      "Turn your study materials into engaging AI-powered quizzes with Studibudi.",
+      "Turn your study materials into engaging AI-powered quizzes with Stidibudi.",
   },
   robots: {
     index: true,
