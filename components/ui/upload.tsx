@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { DocsIcon } from '@/public/icons/illustrations'
 import Loader from '@/components/ui/loader'
+import { authClient } from '@/src/lib/auth/client'
 
 interface UploadProps {
   variant?: 'default' | 'alternate'
@@ -16,6 +17,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.ppt,.pptx,.txt,.csv,.xls,.xlsx'
 const UPGRADE_PATH = '/upgrade'
 const FREE_LIMIT_ERRORS = new Set(['FREE_QUIZ_LIMIT_REACHED', 'FREE_UPLOAD_LIMIT_REACHED'])
+const PENDING_FILE_KEY = 'studibudi:pending-file'
 
 const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated }: UploadProps) => {
   const [isLoading, setIsLoading] = useState(false)
@@ -38,10 +40,40 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
     return false
   }
 
-  const handleFileSelect = async (file: File) => {
-    if (file.size > MAX_FILE_SIZE) { setError('File is too large. The maximum file size is 50MB.'); return }
-    if (file.size === 0) { setError('The selected file is empty.'); return }
+  const savePendingFile = async (file: File) => {
+    const buffer = await file.arrayBuffer()
+    const bytes = new Uint8Array(buffer)
+    let binary = ''
+    const chunkSize = 0x8000
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+    }
 
+    sessionStorage.setItem(PENDING_FILE_KEY, JSON.stringify({
+      name: file.name,
+      type: file.type,
+      lastModified: file.lastModified,
+      data: btoa(binary),
+    }))
+  }
+
+  const restorePendingFile = () => {
+    try {
+      const raw = sessionStorage.getItem(PENDING_FILE_KEY)
+      if (!raw) return null
+      const saved = JSON.parse(raw)
+      const binary = atob(saved.data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      sessionStorage.removeItem(PENDING_FILE_KEY)
+      return new File([bytes], saved.name, { type: saved.type || 'application/octet-stream', lastModified: saved.lastModified || Date.now() })
+    } catch {
+      sessionStorage.removeItem(PENDING_FILE_KEY)
+      return null
+    }
+  }
+
+  const processFile = async (file: File) => {
     setIsLoading(true)
     setError(null)
     onFileUpload?.(file)
@@ -85,8 +117,6 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       const quizId = savedQuizData?.quiz?.id
       if (!quizId) throw new Error('Quiz was generated but no quiz id was returned.')
 
-      // Keep the latest quiz available for the fallback /quiz route, but always
-      // navigate using the newly-created history id so an older quiz can never win.
       localStorage.setItem('currentQuiz', JSON.stringify(data.quiz))
       localStorage.setItem('currentQuizId', quizId)
       onQuizGenerated?.(data.quiz)
@@ -97,6 +127,36 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
       setIsLoading(false)
     }
   }
+
+  const handleFileSelect = async (file: File) => {
+    if (file.size > MAX_FILE_SIZE) { setError('File is too large. The maximum file size is 50MB.'); return }
+    if (file.size === 0) { setError('The selected file is empty.'); return }
+
+    const session = await authClient.getSession()
+    if (!session.data?.user) {
+      try {
+        await savePendingFile(file)
+        window.location.assign('/signin?returnTo=/')
+      } catch {
+        setError('Unable to preserve the selected file. Please try again.')
+      }
+      return
+    }
+
+    await processFile(file)
+  }
+
+  useEffect(() => {
+    const restoreAndProcess = async () => {
+      if (window.location.pathname !== '/') return
+      const session = await authClient.getSession()
+      if (!session.data?.user) return
+      const pendingFile = restorePendingFile()
+      if (pendingFile) await processFile(pendingFile)
+    }
+
+    restoreAndProcess()
+  }, [])
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => { const file = event.target.files?.[0]; if (file) handleFileSelect(file); if (fileInputRef.current) fileInputRef.current.value = '' }
   const handleDrop = (event: React.DragEvent<HTMLDivElement>) => { event.preventDefault(); setIsDragging(false); const file = event.dataTransfer.files?.[0]; if (file) handleFileSelect(file) }
