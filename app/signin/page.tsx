@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { Suspense } from "react";
 import { authClient } from "@/src/lib/auth/client";
 import { Wordmark } from "@/public/icons/logo";
 import Link from "next/link";
@@ -64,4 +64,10 @@ const SigninPage = () => {
   );
 };
 
-export default SigninPage;
+const SigninPageWithSuspense = () => (
+  <Suspense fallback={null}>
+    <SigninPage />
+  </Suspense>
+);
+
+export default SigninPageWithSuspense;
