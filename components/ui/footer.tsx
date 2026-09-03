@@ -36,7 +36,7 @@ const Footer = ({ className }: FooterProps) => {
             ))}
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            {[['Contact Us', '#'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
+            {[['Contact Us', 'mailto:issakalatif49@gmail.com'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
               <Link
                 key={item}
                 href={href}
@@ -87,7 +87,7 @@ const Footer = ({ className }: FooterProps) => {
           ))}
         </div>
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {[['Contact Us', '#'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
+          {[['Contact Us', 'mailto:issakalatif49@gmail.com'], ['Cookie Policy', '/cookie']].map(([item, href]) => (
             <Link
               key={item}
               href={href}
