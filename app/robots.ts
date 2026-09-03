@@ -7,6 +7,6 @@ export default function robots(): MetadataRoute.Robots {
       allow: '/',
       disallow: ['/dashboard', '/quiz', '/api/', '/signin', '/signup', '/upgrade/cancel'],
     },
-    sitemap: 'https://studibudi.vercel.app/sitemap.xml',
+    sitemap: 'https://stidibudi.com/sitemap.xml',
   }
 }
