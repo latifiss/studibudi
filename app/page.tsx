@@ -1,18 +1,5 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-
-import { auth } from "@/src/lib/auth/auth";
-
 import HomeClient from "./home-client";
 
-export default async function Home() {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
-
-  if (!session) {
-    redirect("/signin");
-  }
-
+export default function Home() {
   return <HomeClient />;
 }
