@@ -1,51 +1,43 @@
 {
   "title": "Refund Policy",
-  "lastUpdated": "2026-05-01",
+  "lastUpdated": "2026-09-04",
   "sections": [
     {
-      "title": "1. Refund Policy Overview",
-      "content": "At Studibudi, we stand behind our product and want you to be completely satisfied with your purchase. This Refund Policy outlines the terms and conditions under which we offer refunds for our services."
+      "title": "1. Overview",
+      "content": "At Stidibudi, we want you to be satisfied with your experience using our AI-powered quiz generator. This Refund Policy explains when you may be eligible for a refund for a paid purchase or subscription."
     },
     {
-      "title": "2. 14-Day Money-Back Guarantee",
-      "content": "We offer a 14-day money-back guarantee on all subscription plans. If you are not satisfied with our service within the first 14 days of your purchase, you may request a full refund. This guarantee applies to first-time purchases only."
+      "title": "2. Eligibility for Refunds",
+      "content": "Refund requests are considered when a paid service has a significant technical issue that prevents you from using the service as intended and the issue cannot reasonably be resolved. Refunds may also be considered when a payment was made in error or charged more than once for the same purchase."
     },
     {
-      "title": "3. Eligibility for Refunds",
-      "content": "To be eligible for a refund, you must request it within 14 days of your initial purchase. Refunds are processed to the original payment method used at the time of purchase. Any usage of the service during this period does not affect your eligibility."
+      "title": "3. Non-Refundable Situations",
+      "content": "We generally do not provide refunds for unused time, unused quiz generations, or dissatisfaction with quiz results where the service is functioning as described. We may also decline requests related to purchases made after the relevant subscription or billing period has already been substantially used."
     },
     {
-      "title": "4. How to Request a Refund",
-      "content": "To request a refund, please contact our support team at refunds@studibudi.com with your account email and order details. Our team will process your request within 3-5 business days and notify you of the status of your refund."
+      "title": "4. Subscription Cancellations",
+      "content": "You may cancel a subscription at any time. Cancellation prevents future renewal where applicable, but it does not automatically create a refund for the current billing period. You will generally retain access to the paid features until the end of the period you have already paid for, subject to the terms of the applicable plan."
     },
     {
-      "title": "5. Partial Refunds",
-      "content": "In some cases, we may offer partial refunds at our discretion. This may apply if you have used a significant portion of the service or if you are upgrading to a different plan. Partial refunds will be prorated based on usage."
+      "title": "5. Duplicate or Incorrect Charges",
+      "content": "If you believe you were charged twice for the same purchase or were charged an incorrect amount, please contact us as soon as possible. We will review the payment and, where appropriate, issue a refund for the duplicate or incorrect charge."
     },
     {
-      "title": "6. Refunds for Annual Plans",
-      "content": "For annual subscription plans, refunds are prorated based on the remaining time in your subscription period. The 14-day money-back guarantee still applies, but after this period, refunds will be calculated on a prorated basis."
+      "title": "6. How to Request a Refund",
+      "content": "To request a refund, contact us at issakalatif49@gmail.com with the email address associated with your Stidibudi account, the date of the payment, and a brief explanation of the issue. Please do not send passwords, full payment card numbers, or other sensitive payment information."
     },
     {
-      "title": "7. Refunds for Add-Ons",
-      "content": "Refunds for additional features, add-ons, or extra services purchased separately are subject to the same 14-day money-back guarantee. If you purchased an add-on and are not satisfied, you may request a refund within the same timeframe."
+      "title": "7. Refund Review and Processing",
+      "content": "We review refund requests on a case-by-case basis. If a refund is approved, it will normally be returned to the original payment method. The time required for the refund to appear in your account may depend on your payment provider or financial institution."
     },
     {
-      "title": "8. Processing Time",
-      "content": "Refunds are typically processed within 5-10 business days from the date of approval. The time it takes for the refund to appear in your account depends on your bank or payment provider. We will notify you once your refund has been processed."
+      "title": "8. Changes to This Policy",
+      "content": "We may update this Refund Policy from time to time to reflect changes to our services, billing practices, or applicable requirements. Any updated version will be posted on this page with a revised last updated date."
     },
     {
-      "title": "9. Cancellations",
-      "content": "You may cancel your subscription at any time. If you cancel after the 14-day period, you will not receive a refund for the remaining time in your billing cycle. However, you will continue to have access to the service until the end of your current billing period."
-    },
-    {
-      "title": "10. Changes to This Policy",
-      "content": "We reserve the right to update or modify this refund policy at any time. Any changes will be posted on this page with an updated date. We encourage you to review this policy periodically."
-    },
-    {
-      "title": "11. Contact Us",
-      "content": "If you have any questions about our refund policy or need assistance with a refund request, please contact us at refunds@studibudi.com. Our support team is here to help you."
+      "title": "9. Contact Us",
+      "content": "If you have questions about this Refund Policy or a payment made through Stidibudi, contact us at issakalatif49@gmail.com."
     }
   ],
-  "footer": "By using Studibudi, you acknowledge that you have read and understood our Refund Policy."
+  "footer": "Please contact us as soon as possible if you believe a payment was made in error or you experienced a significant issue with a paid Stidibudi service."
 }
