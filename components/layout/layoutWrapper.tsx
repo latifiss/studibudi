@@ -15,7 +15,7 @@ const allowedRoutes = [
   '/not-found',
   '/terms',
   '/privacy',
-  '/refund-policy',
+  '/refund',
   '/cookie',
   '/upgrade',
   '/cancel',
@@ -43,7 +43,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   const hideSidebar =
     pathname === '/login' || pathname === '/signin' || pathname === '/auth/success' ||
     pathname === '/not-found' || pathname === '/terms' || pathname === '/privacy' ||
-    pathname === '/refund-policy' || pathname === '/cookie' || pathname === '/upgrade' ||
+    pathname === '/refund' || pathname === '/cookie' || pathname === '/upgrade' ||
     pathname === '/cancel' || pathname === '/cancel/success' || pathname === '/cancel/failed' ||
     pathname === '/cancel/confirm' || pathname === '/pro' || pathname === '/quiz' ||
     pathname === '/home' || pathname === '/'
