@@ -18,6 +18,7 @@ const allowedRoutes = [
   '/refund',
   '/cookie',
   '/upgrade',
+  '/pricing',
   '/cancel',
   '/cancel/success',
   '/cancel/failed',
@@ -44,14 +45,14 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     pathname === '/login' || pathname === '/signin' || pathname === '/auth/success' ||
     pathname === '/not-found' || pathname === '/terms' || pathname === '/privacy' ||
     pathname === '/refund' || pathname === '/cookie' || pathname === '/upgrade' ||
-    pathname === '/cancel' || pathname === '/cancel/success' || pathname === '/cancel/failed' ||
+    pathname === '/pricing' || pathname === '/cancel' || pathname === '/cancel/success' || pathname === '/cancel/failed' ||
     pathname === '/cancel/confirm' || pathname === '/pro' || pathname === '/quiz' ||
     pathname === '/home' || pathname === '/'
 
   const hideHeader =
     pathname === '/login' || pathname === '/signin' || pathname === '/auth/success' ||
     pathname === '/not-found' || pathname === '/pro' || pathname === '/upgrade' ||
-    pathname === '/cancel/success' || pathname === '/cancel/failed' || pathname === '/cancel/confirm' ||
+    pathname === '/pricing' || pathname === '/cancel/success' || pathname === '/cancel/failed' || pathname === '/cancel/confirm' ||
     pathname === '/cancel' || pathname === '/quiz' || pathname === '/dashboard'
 
   const showAltHeader = pathname === '/profile'
