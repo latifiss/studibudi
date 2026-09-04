@@ -25,7 +25,7 @@ const Footer = ({ className }: FooterProps) => {
 
         <div className="hidden sm:flex flex-col items-center gap-3">
           <div className="flex items-center gap-2 flex-wrap justify-center">
-            {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy']].map(([item, href]) => (
+            {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy'], ['Pricing', '/pricing']].map(([item, href]) => (
               <Link
                 key={item}
                 href={href}
@@ -76,7 +76,7 @@ const Footer = ({ className }: FooterProps) => {
 
       <div className="flex flex-col items-center gap-3 mt-6 sm:hidden">
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy']].map(([item, href]) => (
+          {[['Terms and conditions', '/terms'], ['Privacy Policy', '/privacy'], ['Pricing', '/pricing']].map(([item, href]) => (
             <Link
               key={item}
               href={href}
