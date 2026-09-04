@@ -20,6 +20,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.3,
     },
     {
+      url: `${baseUrl}/refund`,
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
       url: `${baseUrl}/cookie`,
       changeFrequency: 'yearly',
       priority: 0.2,
