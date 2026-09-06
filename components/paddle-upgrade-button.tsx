@@ -14,49 +14,72 @@ export default function PaddleUpgradeButton({
   className?: string;
 }) {
   const [paddle, setPaddle] = useState<Paddle>();
+  const [priceId, setPriceId] = useState<string>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN;
-    if (!token) {
-      console.error("NEXT_PUBLIC_PADDLE_CLIENT_TOKEN is not configured");
-      setLoading(false);
-      return;
-    }
+    let cancelled = false;
 
-    initializePaddle({
-      environment:
-        process.env.NEXT_PUBLIC_PADDLE_ENVIRONMENT === "production"
-          ? "production"
-          : "sandbox",
-      token,
-      eventCallback: (event) => {
-        if (event.name !== "checkout.completed") return;
-
-        const transactionId = event.data?.transaction_id;
-        if (!transactionId) return;
-
-        // The webhook is still the authoritative provisioning mechanism, but
-        // sandbox checkouts can redirect before the webhook has reached us.
-        // Sync the completed transaction immediately so the user's PRO access
-        // is available as soon as payment succeeds.
-        fetch(`/api/billing/sync?transactionId=${encodeURIComponent(transactionId)}`, {
-          credentials: "include",
+    const loadPaddle = async () => {
+      try {
+        const response = await fetch("/api/billing/config", {
           cache: "no-store",
-        })
-          .catch((error) => console.error("Paddle sync failed:", error))
-          .finally(() => {
-            window.location.assign(`/dashboard?payment=success&transactionId=${encodeURIComponent(transactionId)}`);
-          });
-      },
-    }).then((instance) => {
-      setPaddle(instance);
-      setLoading(false);
-    });
+        });
+
+        if (!response.ok) {
+          throw new Error("Unable to load Paddle production configuration");
+        }
+
+        const config = (await response.json()) as {
+          environment: "production";
+          clientToken: string;
+          priceId: string;
+        };
+
+        const instance = await initializePaddle({
+          environment: "production",
+          token: config.clientToken,
+          eventCallback: (event) => {
+            if (event.name !== "checkout.completed") return;
+
+            const transactionId = event.data?.transaction_id;
+            if (!transactionId) return;
+
+            fetch(
+              `/api/billing/sync?transactionId=${encodeURIComponent(transactionId)}`,
+              {
+                credentials: "include",
+                cache: "no-store",
+              },
+            )
+              .catch((error) => console.error("Paddle sync failed:", error))
+              .finally(() => {
+                window.location.assign(
+                  `/dashboard?payment=success&transactionId=${encodeURIComponent(transactionId)}`,
+                );
+              });
+          },
+        });
+
+        if (cancelled) return;
+
+        setPaddle(instance);
+        setPriceId(config.priceId);
+      } catch (error) {
+        console.error("Paddle production initialization failed:", error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    loadPaddle();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const openCheckout = () => {
-    const priceId = process.env.NEXT_PUBLIC_PADDLE_PRO_PRICE_ID;
     if (!paddle || !priceId) return;
 
     paddle.Checkout.open({
@@ -66,8 +89,6 @@ export default function PaddleUpgradeButton({
         displayMode: "overlay",
         theme: "light",
         variant: "one-page",
-        // Fallback in case Paddle doesn't emit the client event before the
-        // redirect. The dashboard will continue checking entitlements.
         successUrl: `${window.location.origin}/dashboard?payment=success`,
       },
     });
@@ -78,7 +99,7 @@ export default function PaddleUpgradeButton({
       type="button"
       variant="long"
       onClick={openCheckout}
-      disabled={loading || !paddle}
+      disabled={loading || !paddle || !priceId}
       className={className}
     >
       {loading ? "Loading..." : children}
