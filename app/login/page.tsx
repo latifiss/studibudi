@@ -1,12 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { authClient } from "@/src/lib/auth/client";
 import { Wordmark } from "@/public/icons/logo";
 import Link from "next/link";
 
 const SignupPage = () => {
+  const [isLoading, setIsLoading] = useState(false);
+
   const handleSocialLogin = async (provider: "google") => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+
     try {
       await authClient.signIn.social({
         provider,
@@ -14,6 +20,7 @@ const SignupPage = () => {
       });
     } catch (error) {
       console.error("Authentication error:", error);
+      setIsLoading(false);
     }
   };
 
@@ -39,6 +46,7 @@ const SignupPage = () => {
           <div className="flex flex-col gap-3 w-full mt-4">
             <button
               onClick={() => handleSocialLogin("google")}
+              disabled={isLoading}
               className="
                 inline-flex items-center justify-center gap-3 w-full h-10.5 px-5
                 font-text text-[13px] font-bold leading-4.5 tracking-normal
@@ -77,6 +85,13 @@ const SignupPage = () => {
                   d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
                 />
               </svg>
+
+              {isLoading && (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-black/20 border-t-black"
+                />
+              )}
 
               <span>Continue with Google</span>
             </button>
