@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense } from "react";
+import React, { Suspense, useState } from "react";
 import { authClient } from "@/src/lib/auth/client";
 import { Wordmark } from "@/public/icons/logo";
 import Link from "next/link";
@@ -9,8 +9,13 @@ import { useSearchParams } from "next/navigation";
 const SigninPage = () => {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get("returnTo") || "/dashboard";
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSocialLogin = async () => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+
     try {
       await authClient.signIn.social({
         provider: "google",
@@ -18,6 +23,7 @@ const SigninPage = () => {
       });
     } catch (error) {
       console.error("Authentication error:", error);
+      setIsLoading(false);
     }
   };
 
@@ -40,6 +46,7 @@ const SigninPage = () => {
           <div className="flex flex-col gap-3 w-full mt-4">
             <button
               onClick={handleSocialLogin}
+              disabled={isLoading}
               className="inline-flex items-center justify-center gap-3 w-full h-10.5 px-5 font-text text-[13px] font-bold leading-4.5 tracking-normal rounded-lg bg-white text-black border border-[#D9D9D9] hover:bg-gray-50 active:bg-gray-100 shadow-[0_2px_8px_-4px_rgba(0,0,0,0.1)] transition-all duration-200 ease-in-out focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 focus:ring-offset-0 focus-visible:ring-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 48 48" className="shrink-0">
@@ -48,6 +55,14 @@ const SigninPage = () => {
                 <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
                 <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
               </svg>
+
+              {isLoading && (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-black/20 border-t-black"
+                />
+              )}
+
               <span>Continue with Google</span>
             </button>
           </div>
