@@ -172,6 +172,7 @@ const Header = () => {
             </button>
           )}
         </div>
+      </header>
 
       {isMenuOpen && !authenticated && (
         <div className="sm:hidden fixed top-18 left-0 right-0 bg-white border-b border-border z-40 px-4 py-6 shadow-lg">
