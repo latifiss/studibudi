@@ -18,8 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "BILLING_NOT_CONFIGURED", message: "Billing is not configured." }, { status: 500 });
     }
 
-    const environment = process.env.PADDLE_ENVIRONMENT === "production" ? "production" : "sandbox";
-    const baseUrl = environment === "production" ? "https://api.paddle.com" : "https://sandbox-api.paddle.com";
+    const baseUrl = "https://api.paddle.com";
     const response = await fetch(`${baseUrl}/subscriptions/${encodeURIComponent(subscription.paddleSubscriptionId)}`, {
       method: "PATCH",
       headers: {
