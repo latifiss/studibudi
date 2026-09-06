@@ -7,10 +7,7 @@ import { prisma } from "@/src/lib/db/prisma";
 export const runtime = "nodejs";
 
 const paddle = new Paddle(process.env.PADDLE_API_KEY!, {
-  environment:
-    process.env.PADDLE_ENVIRONMENT === "production"
-      ? Environment.production
-      : Environment.sandbox,
+  environment: Environment.production,
 });
 
 function toDate(value: unknown) {
@@ -47,8 +44,6 @@ export async function GET(request: Request) {
     const customData = transaction.customData ?? {};
     const customUserId = typeof customData.userId === "string" ? customData.userId : null;
 
-    // Never trust a transaction ID alone. It must belong to the currently
-    // authenticated Studibudi user through the custom data we attached at checkout.
     if (customUserId !== session.user.id) {
       return NextResponse.json({ error: "Transaction does not belong to this user" }, { status: 403 });
     }
