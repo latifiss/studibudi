@@ -3,11 +3,12 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@/src/lib/db/prisma";
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL,
+  baseURL: process.env.BETTER_AUTH_URL || "https://www.stidibudi.com",
 
   trustedOrigins: [
     "http://localhost:3000",
     "https://stidibudi.com",
+    "https://www.stidibudi.com",
     ...(process.env.NEXT_PUBLIC_APP_URL ? [process.env.NEXT_PUBLIC_APP_URL] : []),
   ],
 
