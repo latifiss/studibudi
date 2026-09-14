@@ -1,6 +1,10 @@
-# Stidibudi
+<div align="center">
+  <img src="./app/icon0.svg" alt="Stidibudi logo" width="120" />
 
-> Turn your study materials into interactive quizzes with AI.
+  # Stidibudi
+
+  > Turn your study materials into interactive quizzes with AI.
+</div>
 
 [![Live Product](https://img.shields.io/badge/Live%20Product-stidibudi.com-111827?style=flat-square)](https://stidibudi.com)
 [![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat-square&logo=next.js)](https://nextjs.org/)
@@ -164,7 +168,7 @@ Core entities include:
 | `UserPreference` | Preferred AI provider/model |
 | `Notification` | User notifications |
 
-The schema also uses explicit status enums for dataset processing, AI analysis, message roles, subscription plans, and subscription states. fileciteturn3file0
+The schema also uses explicit status enums for dataset processing, AI analysis, message roles, subscription plans, and subscription states.
 
 ## Tech Stack
 
@@ -220,8 +224,6 @@ The schema also uses explicit status enums for dataset processing, AI analysis, 
 - **Recharts** and **D3** for data visualization where required
 - **Three.js / React Three Fiber** for interactive visual experiences
 
-The current dependency set reflects the production application architecture in `package.json`. fileciteturn1file0
-
 ## Repository Structure
 
 ```text
@@ -249,7 +251,7 @@ studibudi/
 └── package.json             # Dependencies and scripts
 ```
 
-The repository's API layer is organized around distinct domains such as authentication, billing, quiz generation, uploads, models, onboarding, and quizzes. fileciteturn10file0
+The API layer is organized around distinct domains such as authentication, billing, quiz generation, uploads, models, onboarding, and quizzes.
 
 ## Getting Started
 
@@ -283,7 +285,7 @@ Create a local environment file:
 cp .env.example .env.local
 ```
 
-The repository includes a `.env.example` for local configuration. The current example includes PostHog configuration. fileciteturn4file0
+The repository includes a `.env.example` for local configuration.
 
 Depending on the features you enable, additional environment variables are required for the database, authentication, AI providers, storage, billing, email, analytics, and other integrations.
 
@@ -323,8 +325,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 | `npm run start` | Start the production Next.js server |
 | `npm run lint` | Run ESLint |
 | `npm run postinstall` | Generate the Prisma client |
-
-These commands are defined in the repository's current `package.json`. fileciteturn1file0
 
 ## Environment Configuration
 
@@ -460,38 +460,34 @@ Potential areas for continued development include:
 
 ## Development Notes
 
-The project uses Next.js with the App Router and a server/client split appropriate for a full-stack SaaS application. File processing dependencies such as `unpdf` and `mammoth` are configured as server external packages, reflecting their use in server-side document processing. fileciteturn7file0
+The project uses Next.js with the App Router and a server/client split appropriate for a full-stack SaaS application. File processing dependencies are configured for server-side document processing.
 
-The repository also contains dedicated API domains for authentication, billing, quiz generation, model management, onboarding, uploads, and quiz history, making it possible to extend individual product capabilities without coupling the entire application to one endpoint. fileciteturn10file0
+The repository also contains dedicated API domains for authentication, billing, quiz generation, model management, onboarding, uploads, and quiz history, making it possible to extend individual product capabilities without coupling the entire application to one endpoint.
 
 ## Contributing
 
-Stidibudi is primarily maintained as a product codebase. If you want to propose an improvement:
+Stidibudi is currently maintained as an independent product project. Contributions, ideas, and issue reports are welcome.
 
 1. Fork the repository.
 2. Create a feature branch.
-3. Make the change with a focused scope.
-4. Run linting and verify the affected flow locally.
-5. Open a pull request describing the problem, approach, and testing performed.
-
-For larger changes, open an issue first so the proposed direction can be discussed before implementation.
+3. Make your changes.
+4. Run linting and relevant checks locally.
+5. Open a pull request with a clear description of the change.
 
 ## License
 
-No open-source license is currently declared in the repository. Unless a license is added to the project, the source code should not be assumed to be available for unrestricted reuse, redistribution, or commercial use.
+See the repository for the applicable license and usage terms.
 
 ## Author
 
-**Latif Issaka**
-
-Senior Product Engineer and SaaS founder focused on product design, frontend engineering, and full-stack product development.
+Built by **Latif Issaka**.
 
 - Portfolio: [latifissaka-seven.vercel.app](https://latifissaka-seven.vercel.app/)
-- Product: [stidibudi.com](https://stidibudi.com)
 - GitHub: [@latifiss](https://github.com/latifiss)
+- Product: [stidibudi.com](https://stidibudi.com)
 
 ---
 
-<p align="center">
-  Built from idea to a live SaaS product by <a href="https://github.com/latifiss">Latif Issaka</a>.
-</p>
+<div align="center">
+  <strong>Stidibudi</strong> · Learn from what you already have.
+</div>
