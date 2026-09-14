@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./public/images/logo/logo.svg" alt="Stidibudi logo" width="120" />
+  <img src="./public/images/logo/logo.svg" alt="Stidibudi logo" width="240" />
 
   # Stidibudi
 
