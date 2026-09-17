@@ -36,11 +36,11 @@ const SigninPage = () => {
 
         <div className="flex flex-col items-center justify-center gap-6 w-full text-center">
           <h1 className="text-center text-3xl font-bold text-black font-display">
-            Sign in or create an account
+            Create an account
           </h1>
 
           <p className="text-center text-gray-600 font-text">
-            Log in or sign up to get started with Studibudi
+            Sign up to get started with Studibudi
           </p>
 
           <div className="flex flex-col gap-3 w-full mt-4">
@@ -66,6 +66,13 @@ const SigninPage = () => {
               <span>Continue with Google</span>
             </button>
           </div>
+
+          <p className="text-sm text-gray-500 mt-2 font-text">
+            Already have an account?{" "}
+            <Link href="/login" className="text-black font-medium hover:underline">
+              Login instead
+            </Link>
+          </p>
         </div>
       </div>
     </div>
