@@ -28,18 +28,18 @@ const SigninPage = () => {
   };
 
   return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-white p-6">
+    <div className="flex h-screen w-full items-center justify-center overflow-hidden bg-white p-6">
       <div className="flex flex-col items-center justify-center gap-8 max-w-sm w-full">
         <Link href="/" className="cursor-pointer hover:opacity-70 transition-opacity">
           <Wordmark className="text-black" />
         </Link>
 
-        <div className="flex flex-col items-center justify-center gap-6 w-full">
-          <h1 className="text-3xl font-bold text-black font-display">
+        <div className="flex flex-col items-center justify-center gap-6 w-full text-center">
+          <h1 className="text-center text-3xl font-bold text-black font-display">
             Sign in or create an account
           </h1>
 
-          <p className="text-gray-600 text-center font-text">
+          <p className="text-center text-gray-600 font-text">
             Log in or sign up to get started with Studibudi
           </p>
 
