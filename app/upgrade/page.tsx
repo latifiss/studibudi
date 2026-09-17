@@ -32,7 +32,7 @@ const UpgradePage = () => {
         </h1>
 
         <p className="font-text text-white/70 text-sm mb-6">
-          You need to be signed in before subscribing to Studibudi Pro.
+          You need to be signed in before subscribing to Stidibudi Pro.
         </p>
 
         <button

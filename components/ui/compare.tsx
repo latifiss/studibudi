@@ -28,7 +28,7 @@ const Compare = ({ className }: CompareProps) => {
           'mb-4 sm:mb-5 lg:mb-6'
         )}
       >
-        studibudi vs ChatGPT,<br />
+        stidibudi vs ChatGPT,<br />
         Gemini & Other AI Chats
       </h2>
 

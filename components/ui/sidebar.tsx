@@ -38,7 +38,7 @@ const Sidebar = ({ className, onNewQuiz, ...props }: SidebarProps) => {
     localStorage.removeItem('currentQuiz')
     localStorage.removeItem('currentQuizId')
     if (onNewQuiz) { onNewQuiz(); return }
-    window.dispatchEvent(new Event('studibudi:open-upload'))
+    window.dispatchEvent(new Event('stidibudi:open-upload'))
     router.push('/dashboard')
   }
 

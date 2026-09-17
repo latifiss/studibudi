@@ -47,7 +47,7 @@ const Footer = ({ className }: FooterProps) => {
             ))}
           </div>
           <p className="font-text text-[14px] leading-5 font-medium text-[#737373]">
-            © {currentYear}, studibudi.com. All rights reserved.
+            © {currentYear}, stidibudi.com. All rights reserved.
           </p>
         </div>
 
@@ -98,7 +98,7 @@ const Footer = ({ className }: FooterProps) => {
           ))}
         </div>
         <p className="font-text text-[14px] leading-5 font-medium text-[#737373]">
-          © {currentYear}, studibudi.com. All rights reserved.
+          © {currentYear}, stidibudi.com. All rights reserved.
         </p>
       </div>
 

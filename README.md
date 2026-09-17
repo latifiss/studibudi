@@ -1,9 +1,10 @@
 <div align="center">
   <img src="./public/images/logo/logo.svg" alt="Stidibudi logo" width="240" />
 
-  # Stidibudi
+# Stidibudi
 
-  > Turn your study materials into interactive quizzes with AI.
+> Turn your study materials into interactive quizzes with AI.
+
 </div>
 
 [![Live Product](https://img.shields.io/badge/Live%20Product-stidibudi.com-111827?style=flat-square)](https://stidibudi.com)
@@ -152,21 +153,21 @@ The application uses PostgreSQL with Prisma for relational persistence. The sche
 
 Core entities include:
 
-| Model | Responsibility |
-| --- | --- |
-| `User` | Account identity and user-level relationships |
-| `Session` | Authenticated sessions |
-| `Account` | OAuth/provider account information |
-| `Profile` | User onboarding and profile information |
-| `Dataset` | Uploaded study materials and processing state |
-| `Analysis` | AI processing/generation records |
-| `QuizHistory` | Persisted generated quizzes and results data |
-| `ChatSession` | AI learning conversations associated with source material |
-| `Message` | Conversation messages |
-| `Subscription` | Paddle subscription state |
-| `PaddleWebhookEvent` | Idempotent billing webhook tracking |
-| `UserPreference` | Preferred AI provider/model |
-| `Notification` | User notifications |
+| Model                | Responsibility                                            |
+| -------------------- | --------------------------------------------------------- |
+| `User`               | Account identity and user-level relationships             |
+| `Session`            | Authenticated sessions                                    |
+| `Account`            | OAuth/provider account information                        |
+| `Profile`            | User onboarding and profile information                   |
+| `Dataset`            | Uploaded study materials and processing state             |
+| `Analysis`           | AI processing/generation records                          |
+| `QuizHistory`        | Persisted generated quizzes and results data              |
+| `ChatSession`        | AI learning conversations associated with source material |
+| `Message`            | Conversation messages                                     |
+| `Subscription`       | Paddle subscription state                                 |
+| `PaddleWebhookEvent` | Idempotent billing webhook tracking                       |
+| `UserPreference`     | Preferred AI provider/model                               |
+| `Notification`       | User notifications                                        |
 
 The schema also uses explicit status enums for dataset processing, AI analysis, message roles, subscription plans, and subscription states.
 
@@ -227,7 +228,7 @@ The schema also uses explicit status enums for dataset processing, AI analysis, 
 ## Repository Structure
 
 ```text
-studibudi/
+stidibudi/
 ├── app/                    # Next.js App Router pages and API routes
 │   └── api/
 │       ├── auth/           # Authentication endpoints
@@ -267,8 +268,8 @@ Before running Stidibudi locally, make sure you have:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/latifiss/studibudi.git
-cd studibudi
+git clone https://github.com/latifiss/stidibudi.git
+cd stidibudi
 ```
 
 ### 2. Install dependencies
@@ -318,13 +319,13 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Available Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the Next.js development server |
-| `npm run build` | Apply production Prisma migrations and build the application |
-| `npm run start` | Start the production Next.js server |
-| `npm run lint` | Run ESLint |
-| `npm run postinstall` | Generate the Prisma client |
+| Command               | Description                                                  |
+| --------------------- | ------------------------------------------------------------ |
+| `npm run dev`         | Start the Next.js development server                         |
+| `npm run build`       | Apply production Prisma migrations and build the application |
+| `npm run start`       | Start the production Next.js server                          |
+| `npm run lint`        | Run ESLint                                                   |
+| `npm run postinstall` | Generate the Prisma client                                   |
 
 ## Environment Configuration
 

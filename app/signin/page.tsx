@@ -40,7 +40,7 @@ const SigninPage = () => {
           </h1>
 
           <p className="text-center text-gray-600 font-text">
-            Sign up to get started with Studibudi
+            Sign up to get started with Stidibudi
           </p>
 
           <div className="flex flex-col gap-3 w-full mt-4">

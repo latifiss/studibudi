@@ -14,7 +14,7 @@ const DashboardHeader = () => {
   const handleNewQuiz = () => {
     localStorage.removeItem('currentQuiz')
     localStorage.removeItem('currentQuizId')
-    window.dispatchEvent(new Event('studibudi:open-upload'))
+    window.dispatchEvent(new Event('stidibudi:open-upload'))
   }
 
   return (

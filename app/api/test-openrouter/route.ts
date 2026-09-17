@@ -19,7 +19,7 @@ export async function GET() {
         headers: {
           'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
           'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'http://localhost:3000',
-          'X-Title': process.env.OPENROUTER_SITE_NAME || 'Studibudi',
+          'X-Title': process.env.OPENROUTER_SITE_NAME || 'Stidibudi',
           'Content-Type': 'application/json',
         },
       }

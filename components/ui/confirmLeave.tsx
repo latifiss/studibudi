@@ -38,7 +38,7 @@ const ConfirmLeave = ({
           </h1>
 
           <p className="font-text text-white/80 text-[15px] sm:text-[17px] text-center mb-8 sm:mb-10 px-3 sm:px-0 shrink-0">
-            You&apos;ll be missing out on Studibudi&apos;s superpowers
+            You&apos;ll be missing out on Stidibudi&apos;s superpowers
           </p>
 
           <div className="flex flex-col items-center gap-3 sm:gap-3.5 w-full px-3 sm:px-0 shrink-0">

@@ -67,7 +67,7 @@ export async function POST(request: Request) {
           const resolvedUserId = userId ?? existingSubscription?.userId;
 
           if (!resolvedUserId) {
-            console.error("Paddle subscription has no Studibudi user mapping", {
+            console.error("Paddle subscription has no Stidibudi user mapping", {
               paddleSubscriptionId,
               eventId: event.eventId,
             });

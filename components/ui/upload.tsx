@@ -17,7 +17,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024
 const ACCEPTED_FILE_TYPES = '.pdf,.doc,.docx,.ppt,.pptx,.txt,.csv,.xls,.xlsx'
 const UPGRADE_PATH = '/upgrade'
 const FREE_LIMIT_ERRORS = new Set(['FREE_QUIZ_LIMIT_REACHED', 'FREE_UPLOAD_LIMIT_REACHED'])
-const PENDING_FILE_KEY = 'studibudi:pending-file'
+const PENDING_FILE_KEY = 'stidibudi:pending-file'
 
 const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated }: UploadProps) => {
   const [isLoading, setIsLoading] = useState(false)
@@ -28,8 +28,8 @@ const Upload = ({ variant = 'default', className, onFileUpload, onQuizGenerated 
 
   useEffect(() => {
     const openUpload = () => fileInputRef.current?.click()
-    window.addEventListener('studibudi:open-upload', openUpload)
-    return () => window.removeEventListener('studibudi:open-upload', openUpload)
+    window.addEventListener('stidibudi:open-upload', openUpload)
+    return () => window.removeEventListener('stidibudi:open-upload', openUpload)
   }, [])
 
   const redirectIfLimitReached = (data: any) => {
